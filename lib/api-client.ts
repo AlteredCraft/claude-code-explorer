@@ -1,0 +1,398 @@
+// API Client for Claude Explorer REST API
+// This client fetches data from the standalone API server
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+
+interface PaginationMeta {
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+interface PaginatedResponse<T> {
+  data: T[];
+  meta: PaginationMeta;
+}
+
+// Project types
+export interface Project {
+  path: string;
+  encodedPath: string;
+  displayPath: string;
+  name: string;
+  sessionCount: number;
+  lastSessionId?: string;
+  lastActivity?: string;
+  lastCost?: number;
+  lastDuration?: number;
+  lastTotalInputTokens?: number;
+  lastTotalOutputTokens?: number;
+}
+
+export interface ProjectDetail extends Project {
+  recentSessions: Session[];
+  activitySummary: {
+    totalMessages: number;
+    totalAgentSessions: number;
+    dateRange: {
+      start?: string;
+      end?: string;
+    };
+  };
+}
+
+// Session types
+export interface Session {
+  id: string;
+  projectPath: string;
+  startTime: string;
+  endTime?: string;
+  messageCount: number;
+  model?: string;
+  isAgent: boolean;
+}
+
+export interface SessionDetail extends Session {
+  duration?: number;
+  metadata: SessionMetadata;
+  correlatedData: CorrelatedData;
+}
+
+export interface SessionMetadata {
+  totalTokens: number;
+  model?: string;
+  toolsUsed: string[];
+}
+
+// Message types
+export interface Message {
+  uuid: string;
+  parentUuid: string | null;
+  type: 'user' | 'assistant' | 'file-history-snapshot' | 'progress' | 'result';
+  timestamp: string;
+  sessionId: string;
+  content: MessageContent;
+  model?: string;
+  cwd?: string;
+  gitBranch?: string;
+}
+
+export interface MessageContent {
+  role: 'user' | 'assistant';
+  content: string | ContentBlock[];
+}
+
+export interface ContentBlock {
+  type: 'text' | 'thinking' | 'tool_use' | 'tool_result';
+  text?: string;
+  thinking?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+  tool_use_id?: string;
+  content?: string | unknown[];
+}
+
+// Correlated data types
+export interface CorrelatedData {
+  todos: TodoItem[];
+  fileHistory: FileHistoryEntry[];
+  debugLogs: string[];
+  linkedPlan?: string;
+  linkedSkill?: string;
+}
+
+export interface TodoItem {
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+export interface FileHistoryEntry {
+  path: string;
+  action: 'read' | 'write' | 'edit';
+  timestamp: string;
+}
+
+// Activity types
+export interface DailyActivity {
+  date: string;
+  sessions: Session[];
+  totalMessages: number;
+  sessionCount: number;
+}
+
+export interface ActivityResponse {
+  data: DailyActivity[];
+  summary: {
+    totalSessions: number;
+    totalMessages: number;
+    maxDailyMessages: number;
+  };
+}
+
+// File browsing types
+export interface FileContent {
+  type: 'file' | 'directory';
+  path: string;
+  content?: string;
+  entries?: Array<{ name: string; isDirectory: boolean }>;
+  error?: string;
+}
+
+// History types
+export interface HistoryEntry {
+  display: string;
+  timestamp: number;
+  project?: string;
+  pastedContents?: Record<string, unknown>;
+}
+
+// Stats types
+export interface Stats {
+  version?: number;
+  lastComputedDate?: string;
+  totalSessions?: number;
+  totalMessages?: number;
+  firstSessionDate?: string;
+  hourCounts?: Record<string, number>;
+}
+
+export interface DailyStats {
+  date: string;
+  messageCount: number;
+  sessionCount: number;
+  toolCallCount: number;
+}
+
+export interface ModelUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+}
+
+// API Error
+export class ApiError extends Error {
+  code: string;
+  status: number;
+
+  constructor(message: string, code: string, status: number) {
+    super(message);
+    this.code = code;
+    this.status = status;
+    this.name = 'ApiError';
+  }
+}
+
+// Fetch wrapper with error handling
+async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`;
+
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      code: 'UNKNOWN_ERROR',
+      message: response.statusText,
+    }));
+    throw new ApiError(error.message, error.code, response.status);
+  }
+
+  return response.json();
+}
+
+// Projects API
+export async function getProjects(options?: {
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResponse<Project>> {
+  const params = new URLSearchParams();
+  if (options?.sortBy) params.set('sortBy', options.sortBy);
+  if (options?.sortOrder) params.set('sortOrder', options.sortOrder);
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.offset) params.set('offset', String(options.offset));
+
+  const query = params.toString();
+  return fetchApi(`/projects${query ? `?${query}` : ''}`);
+}
+
+export async function getProject(encodedPath: string): Promise<ProjectDetail> {
+  return fetchApi(`/projects/${encodeURIComponent(encodedPath)}`);
+}
+
+// Sessions API
+export async function getProjectSessions(
+  encodedPath: string,
+  options?: {
+    type?: 'regular' | 'agent' | 'all';
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    limit?: number;
+    offset?: number;
+  }
+): Promise<PaginatedResponse<Session>> {
+  const params = new URLSearchParams();
+  if (options?.type) params.set('type', options.type);
+  if (options?.sortBy) params.set('sortBy', options.sortBy);
+  if (options?.sortOrder) params.set('sortOrder', options.sortOrder);
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.offset) params.set('offset', String(options.offset));
+
+  const query = params.toString();
+  return fetchApi(`/projects/${encodeURIComponent(encodedPath)}/sessions${query ? `?${query}` : ''}`);
+}
+
+export async function getSession(
+  encodedPath: string,
+  sessionId: string
+): Promise<SessionDetail> {
+  return fetchApi(`/projects/${encodeURIComponent(encodedPath)}/sessions/${sessionId}`);
+}
+
+// Messages API
+export async function getSessionMessages(
+  encodedPath: string,
+  sessionId: string,
+  options?: {
+    type?: 'user' | 'assistant' | 'all';
+    limit?: number;
+    offset?: number;
+  }
+): Promise<PaginatedResponse<Message>> {
+  const params = new URLSearchParams();
+  if (options?.type) params.set('type', options.type);
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.offset) params.set('offset', String(options.offset));
+
+  const query = params.toString();
+  return fetchApi(
+    `/projects/${encodeURIComponent(encodedPath)}/sessions/${sessionId}/messages${query ? `?${query}` : ''}`
+  );
+}
+
+export async function getMessage(
+  encodedPath: string,
+  sessionId: string,
+  messageId: string
+): Promise<Message> {
+  return fetchApi(
+    `/projects/${encodeURIComponent(encodedPath)}/sessions/${sessionId}/messages/${messageId}`
+  );
+}
+
+// Activity API
+export async function getProjectActivity(
+  encodedPath: string,
+  options?: {
+    days?: number;
+    type?: 'regular' | 'agent' | 'all';
+  }
+): Promise<ActivityResponse> {
+  const params = new URLSearchParams();
+  if (options?.days) params.set('days', String(options.days));
+  if (options?.type) params.set('type', options.type);
+
+  const query = params.toString();
+  return fetchApi(`/projects/${encodeURIComponent(encodedPath)}/activity${query ? `?${query}` : ''}`);
+}
+
+// Correlated Data API
+export async function getCorrelatedData(sessionId: string): Promise<CorrelatedData> {
+  return fetchApi(`/sessions/${sessionId}/correlated`);
+}
+
+export async function getSessionTodos(sessionId: string): Promise<{ data: TodoItem[] }> {
+  return fetchApi(`/sessions/${sessionId}/todos`);
+}
+
+export async function getSessionFileHistory(sessionId: string): Promise<{ data: FileHistoryEntry[] }> {
+  return fetchApi(`/sessions/${sessionId}/file-history`);
+}
+
+export async function getSessionDebugLogs(sessionId: string): Promise<{ data: string[] }> {
+  return fetchApi(`/sessions/${sessionId}/debug-logs`);
+}
+
+// Plans API
+export async function getPlans(): Promise<{ data: string[] }> {
+  return fetchApi('/plans');
+}
+
+export async function getPlan(planName: string): Promise<{ name: string; content: string }> {
+  return fetchApi(`/plans/${encodeURIComponent(planName)}`);
+}
+
+// Skills API
+export async function getSkills(): Promise<{ data: string[] }> {
+  return fetchApi('/skills');
+}
+
+// Stats API
+export async function getStats(): Promise<Stats> {
+  return fetchApi('/stats');
+}
+
+export async function getDailyStats(options?: {
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+}): Promise<{ data: DailyStats[] }> {
+  const params = new URLSearchParams();
+  if (options?.startDate) params.set('startDate', options.startDate);
+  if (options?.endDate) params.set('endDate', options.endDate);
+  if (options?.limit) params.set('limit', String(options.limit));
+
+  const query = params.toString();
+  return fetchApi(`/stats/daily${query ? `?${query}` : ''}`);
+}
+
+export async function getModelStats(): Promise<{ data: Record<string, ModelUsage> }> {
+  return fetchApi('/stats/models');
+}
+
+// History API
+export async function getHistory(options?: {
+  project?: string;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResponse<HistoryEntry>> {
+  const params = new URLSearchParams();
+  if (options?.project) params.set('project', options.project);
+  if (options?.startDate) params.set('startDate', options.startDate);
+  if (options?.endDate) params.set('endDate', options.endDate);
+  if (options?.search) params.set('search', options.search);
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.offset) params.set('offset', String(options.offset));
+
+  const query = params.toString();
+  return fetchApi(`/history${query ? `?${query}` : ''}`);
+}
+
+// Files API
+export async function browseFiles(path?: string): Promise<FileContent> {
+  const params = new URLSearchParams();
+  if (path) params.set('path', path);
+
+  const query = params.toString();
+  return fetchApi(`/files${query ? `?${query}` : ''}`);
+}
+
+// Config API
+export async function getConfig(): Promise<Record<string, unknown>> {
+  return fetchApi('/config');
+}
+
+export async function getSettings(): Promise<Record<string, unknown>> {
+  return fetchApi('/config/settings');
+}

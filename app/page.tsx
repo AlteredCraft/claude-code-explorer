@@ -1,5 +1,4 @@
-import { getProjects, getProjectDisplayInfo } from '@/lib/claude-data';
-import { encodeForUrl } from '@/lib/path-utils';
+import { getProjects } from '@/lib/api-client';
 import { SourcePath } from '@/components/source-path';
 import {
   Table,
@@ -13,9 +12,14 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 
-function formatRelativeTime(date: Date | undefined): string {
-  if (!date) return 'Never';
+function encodeForUrl(str: string): string {
+  return encodeURIComponent(str);
+}
 
+function formatRelativeTime(dateStr: string | undefined): string {
+  if (!dateStr) return 'Never';
+
+  const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -43,7 +47,8 @@ function formatTokens(tokens: number | undefined): string {
 }
 
 export default async function HomePage() {
-  const projects = await getProjects();
+  const response = await getProjects();
+  const projects = response.data;
 
   return (
     <div className="space-y-6">
@@ -79,7 +84,6 @@ export default async function HomePage() {
             </TableHeader>
             <TableBody>
               {projects.map((project) => {
-                const info = getProjectDisplayInfo(project);
                 return (
                   <TableRow key={project.encodedPath} className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
                     <TableCell>
@@ -88,10 +92,10 @@ export default async function HomePage() {
                         className="block"
                       >
                         <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                          {info.name}
+                          {project.name}
                         </div>
                         <div className="text-xs text-zinc-500 dark:text-zinc-500 font-mono">
-                          {info.displayPath}
+                          {project.displayPath}
                         </div>
                       </Link>
                     </TableCell>
