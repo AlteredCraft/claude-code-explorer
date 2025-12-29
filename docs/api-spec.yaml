@@ -39,6 +39,8 @@ tags:
     description: Session message content
   - name: Correlated Data
     description: Todos, file history, debug logs, and plans
+  - name: Files
+    description: Browse ~/.claude/ filesystem (read-only)
   - name: Statistics
     description: Usage statistics and analytics
   - name: History
@@ -153,6 +155,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{encodedPath}/activity:
+    get:
+      operationId: getProjectActivity
+      summary: Get project activity timeline
+      description: |
+        Returns session activity aggregated by day for timeline visualization.
+        Groups sessions by calendar day with message counts for charting.
+      tags:
+        - Projects
+      parameters:
+        - $ref: '#/components/parameters/encodedPath'
+        - name: days
+          in: query
+          description: Number of days to include (default 14)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+            default: 14
+        - name: type
+          in: query
+          description: Filter by session type
+          schema:
+            type: string
+            enum: [regular, agent, all]
+            default: regular
+      responses:
+        '200':
+          description: Daily activity breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DailyProjectActivity'
+                  summary:
+                    type: object
+                    properties:
+                      totalSessions:
+                        type: integer
+                      totalMessages:
+                        type: integer
+                      maxDailyMessages:
+                        type: integer
+                        description: Max messages in a single day (for chart scaling)
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -514,6 +567,46 @@ paths:
                     $ref: '#/components/schemas/PaginationMeta'
 
   # =============================================================================
+  # FILES (Browse ~/.claude/ filesystem)
+  # =============================================================================
+  /files:
+    get:
+      operationId: browseFiles
+      summary: Browse ~/.claude/ directory
+      description: |
+        Read-only access to browse files and directories within `~/.claude/`.
+        Used by the SourcePath component to inspect raw data files.
+
+        Security: Only paths within `~/.claude/` are accessible. Path traversal
+        attempts are blocked.
+      tags:
+        - Files
+      parameters:
+        - name: path
+          in: query
+          description: |
+            Relative path within ~/.claude/ (e.g., "projects", "todos/session-123.json").
+            Defaults to root (~/.claude/).
+          schema:
+            type: string
+            default: ''
+      responses:
+        '200':
+          description: File or directory content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileContent'
+        '400':
+          description: Invalid path (outside ~/.claude/)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
   # CONFIGURATION
   # =============================================================================
   /config:
@@ -634,6 +727,8 @@ components:
       required:
         - path
         - encodedPath
+        - name
+        - displayPath
         - sessionCount
       properties:
         path:
@@ -823,20 +918,34 @@ components:
 
     ContentBlock:
       type: object
+      required:
+        - type
       properties:
         type:
           type: string
           enum: [text, thinking, tool_use, tool_result]
         text:
           type: string
+          description: Text content (for text blocks)
         thinking:
           type: string
+          description: Thinking/reasoning content (for thinking blocks)
         name:
           type: string
           description: Tool name (for tool_use blocks)
         input:
           type: object
-          description: Tool input parameters
+          description: Tool input parameters (for tool_use blocks)
+        tool_use_id:
+          type: string
+          description: Tool use ID linking tool_use to tool_result
+        content:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+          description: Tool result content (for tool_result blocks)
 
     # -------------------------------------------------------------------------
     # Correlated Data
@@ -892,6 +1001,64 @@ components:
         timestamp:
           type: string
           format: date-time
+
+    # -------------------------------------------------------------------------
+    # Activity
+    # -------------------------------------------------------------------------
+    DailyProjectActivity:
+      type: object
+      required:
+        - date
+        - sessions
+        - totalMessages
+      properties:
+        date:
+          type: string
+          format: date
+          description: Calendar date (YYYY-MM-DD)
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+          description: Sessions that started on this day
+        totalMessages:
+          type: integer
+          description: Sum of messageCount across all sessions
+        sessionCount:
+          type: integer
+          description: Number of sessions on this day
+
+    # -------------------------------------------------------------------------
+    # Files
+    # -------------------------------------------------------------------------
+    FileContent:
+      type: object
+      required:
+        - type
+        - path
+      properties:
+        type:
+          type: string
+          enum: [file, directory]
+        path:
+          type: string
+          description: Absolute path to the file/directory
+        content:
+          type: string
+          description: File content (for type=file, max 100KB)
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              isDirectory:
+                type: boolean
+          description: Directory entries (for type=directory)
+        error:
+          type: string
+          description: Error message if file could not be read
 
     # -------------------------------------------------------------------------
     # Statistics
