@@ -1,0 +1,1237 @@
+openapi: 3.0.3
+info:
+  title: Claude Explorer API
+  description: |
+    REST API for exploring Claude Code session data from `~/.claude/`.
+
+    This API provides programmatic access to:
+    - Projects and their session transcripts
+    - Session messages, metadata, and correlated data (todos, file history, debug logs)
+    - Usage statistics and prompt history
+    - Configuration (read-only)
+
+    ## Key Concepts
+
+    ### Session UUID
+    A Session UUID (e.g., `31f3f224-f440-41ac-9244-b27ff054116d`) is the universal identifier
+    that links data across multiple directories in `~/.claude/`.
+
+    ### Encoded Project Path
+    Project paths are encoded by replacing `/` with `-` (e.g., `/Users/sam/foo` becomes `-Users-sam-foo`).
+    Use URL encoding when passing encoded paths in URLs.
+
+  version: 1.0.0
+  contact:
+    name: Claude Explorer
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3001/api/v1
+    description: Development server
+
+tags:
+  - name: Projects
+    description: Project management and listing
+  - name: Sessions
+    description: Session transcripts and metadata
+  - name: Messages
+    description: Session message content
+  - name: Correlated Data
+    description: Todos, file history, debug logs, and plans
+  - name: Files
+    description: Browse ~/.claude/ filesystem (read-only)
+  - name: Statistics
+    description: Usage statistics and analytics
+  - name: History
+    description: Prompt history across sessions
+  - name: Configuration
+    description: Claude Code configuration (read-only)
+
+paths:
+  # =============================================================================
+  # PROJECTS
+  # =============================================================================
+  /projects:
+    get:
+      operationId: listProjects
+      summary: List all projects
+      description: Returns all projects found in `~/.claude/projects/` with metadata from `~/.claude.json`
+      tags:
+        - Projects
+      parameters:
+        - $ref: '#/components/parameters/sortBy'
+        - $ref: '#/components/parameters/sortOrder'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+  /projects/{encodedPath}:
+    get:
+      operationId: getProject
+      summary: Get project details
+      description: Returns detailed information about a specific project
+      tags:
+        - Projects
+      parameters:
+        - $ref: '#/components/parameters/encodedPath'
+      responses:
+        '200':
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
+  # SESSIONS
+  # =============================================================================
+  /projects/{encodedPath}/sessions:
+    get:
+      operationId: listProjectSessions
+      summary: List sessions for a project
+      description: Returns all sessions (conversation transcripts) for a specific project
+      tags:
+        - Sessions
+      parameters:
+        - $ref: '#/components/parameters/encodedPath'
+        - name: type
+          in: query
+          description: Filter by session type
+          schema:
+            type: string
+            enum: [regular, agent, all]
+            default: all
+        - $ref: '#/components/parameters/sortBy'
+        - $ref: '#/components/parameters/sortOrder'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Session'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{encodedPath}/sessions/{sessionId}:
+    get:
+      operationId: getSession
+      summary: Get session details
+      description: Returns detailed information about a specific session including metadata
+      tags:
+        - Sessions
+      parameters:
+        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/sessionId'
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{encodedPath}/activity:
+    get:
+      operationId: getProjectActivity
+      summary: Get project activity timeline
+      description: |
+        Returns session activity aggregated by day for timeline visualization.
+        Groups sessions by calendar day with message counts for charting.
+      tags:
+        - Projects
+      parameters:
+        - $ref: '#/components/parameters/encodedPath'
+        - name: days
+          in: query
+          description: Number of days to include (default 14)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+            default: 14
+        - name: type
+          in: query
+          description: Filter by session type
+          schema:
+            type: string
+            enum: [regular, agent, all]
+            default: regular
+      responses:
+        '200':
+          description: Daily activity breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DailyProjectActivity'
+                  summary:
+                    type: object
+                    properties:
+                      totalSessions:
+                        type: integer
+                      totalMessages:
+                        type: integer
+                      maxDailyMessages:
+                        type: integer
+                        description: Max messages in a single day (for chart scaling)
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
+  # MESSAGES
+  # =============================================================================
+  /projects/{encodedPath}/sessions/{sessionId}/messages:
+    get:
+      operationId: listSessionMessages
+      summary: List messages in a session
+      description: Returns all messages from a session transcript (JSONL file)
+      tags:
+        - Messages
+      parameters:
+        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/sessionId'
+        - name: type
+          in: query
+          description: Filter by message type
+          schema:
+            type: string
+            enum: [user, assistant, all]
+            default: all
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{encodedPath}/sessions/{sessionId}/messages/{messageId}:
+    get:
+      operationId: getMessage
+      summary: Get a specific message
+      description: Returns a single message by its UUID
+      tags:
+        - Messages
+      parameters:
+        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/sessionId'
+        - name: messageId
+          in: path
+          required: true
+          description: Message UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Message details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
+  # CORRELATED DATA
+  # =============================================================================
+  /sessions/{sessionId}/correlated:
+    get:
+      operationId: getCorrelatedData
+      summary: Get all correlated data for a session
+      description: |
+        Returns all data correlated by session ID across `~/.claude/` directories:
+        - Todos from `todos/`
+        - File history from `file-history/`
+        - Debug logs from `debug/`
+        - Linked plans from `plans/`
+      tags:
+        - Correlated Data
+      parameters:
+        - $ref: '#/components/parameters/sessionIdPath'
+      responses:
+        '200':
+          description: Correlated data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorrelatedData'
+
+  /sessions/{sessionId}/todos:
+    get:
+      operationId: getSessionTodos
+      summary: Get todos for a session
+      description: Returns todo items associated with a session from `~/.claude/todos/`
+      tags:
+        - Correlated Data
+      parameters:
+        - $ref: '#/components/parameters/sessionIdPath'
+      responses:
+        '200':
+          description: Todo items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TodoItem'
+
+  /sessions/{sessionId}/file-history:
+    get:
+      operationId: getSessionFileHistory
+      summary: Get file history for a session
+      description: Returns file operations (read/write/edit) from `~/.claude/file-history/{sessionId}/`
+      tags:
+        - Correlated Data
+      parameters:
+        - $ref: '#/components/parameters/sessionIdPath'
+      responses:
+        '200':
+          description: File history entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FileHistoryEntry'
+
+  /sessions/{sessionId}/debug-logs:
+    get:
+      operationId: getSessionDebugLogs
+      summary: Get debug logs for a session
+      description: Returns debug log content from `~/.claude/debug/{sessionId}.txt`
+      tags:
+        - Correlated Data
+      parameters:
+        - $ref: '#/components/parameters/sessionIdPath'
+      responses:
+        '200':
+          description: Debug logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+                      description: Debug log content (truncated to 5000 chars per file)
+
+  # =============================================================================
+  # PLANS & SKILLS
+  # =============================================================================
+  /plans:
+    get:
+      operationId: listPlans
+      summary: List all plans
+      description: Returns all plan documents from `~/.claude/plans/`
+      tags:
+        - Correlated Data
+      responses:
+        '200':
+          description: List of plan names
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+                      example: cosmic-plotting-bunny.md
+
+  /plans/{planName}:
+    get:
+      operationId: getPlan
+      summary: Get plan content
+      description: Returns the content of a specific plan document
+      tags:
+        - Correlated Data
+      parameters:
+        - name: planName
+          in: path
+          required: true
+          description: Plan filename
+          schema:
+            type: string
+            example: cosmic-plotting-bunny.md
+      responses:
+        '200':
+          description: Plan content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  content:
+                    type: string
+                    description: Markdown content
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /skills:
+    get:
+      operationId: listSkills
+      summary: List all skills
+      description: Returns all skill names from `~/.claude/skills/`
+      tags:
+        - Correlated Data
+      responses:
+        '200':
+          description: List of skill names
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+
+  # =============================================================================
+  # STATISTICS
+  # =============================================================================
+  /stats:
+    get:
+      operationId: getStats
+      summary: Get usage statistics
+      description: Returns aggregated usage statistics from `~/.claude/stats-cache.json`
+      tags:
+        - Statistics
+      responses:
+        '200':
+          description: Usage statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stats'
+
+  /stats/daily:
+    get:
+      operationId: getDailyStats
+      summary: Get daily activity statistics
+      description: Returns daily activity breakdown (messages, sessions, tool calls)
+      tags:
+        - Statistics
+      parameters:
+        - name: startDate
+          in: query
+          description: Start date (inclusive)
+          schema:
+            type: string
+            format: date
+            example: '2025-01-01'
+        - name: endDate
+          in: query
+          description: End date (inclusive)
+          schema:
+            type: string
+            format: date
+            example: '2025-01-31'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: Daily activity data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DailyActivity'
+
+  /stats/models:
+    get:
+      operationId: getModelStats
+      summary: Get model usage statistics
+      description: Returns token usage broken down by model
+      tags:
+        - Statistics
+      responses:
+        '200':
+          description: Model usage data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/ModelUsage'
+
+  # =============================================================================
+  # HISTORY
+  # =============================================================================
+  /history:
+    get:
+      operationId: getHistory
+      summary: Get prompt history
+      description: Returns user prompt history from `~/.claude/history.jsonl`
+      tags:
+        - History
+      parameters:
+        - name: project
+          in: query
+          description: Filter by project path
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          description: Filter prompts after this date
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          description: Filter prompts before this date
+          schema:
+            type: string
+            format: date-time
+        - name: search
+          in: query
+          description: Search prompt text
+          schema:
+            type: string
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: Prompt history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HistoryEntry'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+  # =============================================================================
+  # FILES (Browse ~/.claude/ filesystem)
+  # =============================================================================
+  /files:
+    get:
+      operationId: browseFiles
+      summary: Browse ~/.claude/ directory
+      description: |
+        Read-only access to browse files and directories within `~/.claude/`.
+        Used by the SourcePath component to inspect raw data files.
+
+        Security: Only paths within `~/.claude/` are accessible. Path traversal
+        attempts are blocked.
+      tags:
+        - Files
+      parameters:
+        - name: path
+          in: query
+          description: |
+            Relative path within ~/.claude/ (e.g., "projects", "todos/session-123.json").
+            Defaults to root (~/.claude/).
+          schema:
+            type: string
+            default: ''
+      responses:
+        '200':
+          description: File or directory content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileContent'
+        '400':
+          description: Invalid path (outside ~/.claude/)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
+  # CONFIGURATION
+  # =============================================================================
+  /config:
+    get:
+      operationId: getConfig
+      summary: Get Claude configuration
+      description: |
+        Returns read-only configuration from `~/.claude.json`.
+        Sensitive fields (OAuth tokens, credentials) are redacted.
+      tags:
+        - Configuration
+      responses:
+        '200':
+          description: Configuration data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+
+  /config/settings:
+    get:
+      operationId: getSettings
+      summary: Get user settings
+      description: Returns user settings from `~/.claude/settings.json`
+      tags:
+        - Configuration
+      responses:
+        '200':
+          description: Settings data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settings'
+
+# =============================================================================
+# COMPONENTS
+# =============================================================================
+components:
+  parameters:
+    encodedPath:
+      name: encodedPath
+      in: path
+      required: true
+      description: URL-encoded project path (e.g., `-Users-sam-foo`)
+      schema:
+        type: string
+        example: '-Users-sam-Projects-my-app'
+
+    sessionId:
+      name: sessionId
+      in: path
+      required: true
+      description: Session UUID
+      schema:
+        type: string
+        format: uuid
+        example: '31f3f224-f440-41ac-9244-b27ff054116d'
+
+    sessionIdPath:
+      name: sessionId
+      in: path
+      required: true
+      description: Session UUID
+      schema:
+        type: string
+        format: uuid
+
+    sortBy:
+      name: sortBy
+      in: query
+      description: Field to sort by
+      schema:
+        type: string
+        default: lastActivity
+
+    sortOrder:
+      name: sortOrder
+      in: query
+      description: Sort order
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+
+    limit:
+      name: limit
+      in: query
+      description: Maximum number of items to return
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+
+    offset:
+      name: offset
+      in: query
+      description: Number of items to skip
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    # -------------------------------------------------------------------------
+    # Core Entities
+    # -------------------------------------------------------------------------
+    Project:
+      type: object
+      required:
+        - path
+        - encodedPath
+        - name
+        - displayPath
+        - sessionCount
+      properties:
+        path:
+          type: string
+          description: Decoded absolute path
+          example: '/Users/sam/Projects/my-app'
+        encodedPath:
+          type: string
+          description: Encoded path format (/ replaced with -)
+          example: '-Users-sam-Projects-my-app'
+        displayPath:
+          type: string
+          description: Human-friendly path (home-relative)
+          example: '~/Projects/my-app'
+        name:
+          type: string
+          description: Project name (last path component)
+          example: 'my-app'
+        sessionCount:
+          type: integer
+          description: Number of sessions in this project
+        lastSessionId:
+          type: string
+          format: uuid
+          description: UUID of most recent session
+        lastActivity:
+          type: string
+          format: date-time
+          description: Timestamp of most recent activity
+        lastCost:
+          type: number
+          format: float
+          description: API cost of last session (USD)
+        lastDuration:
+          type: integer
+          description: Duration of last session (milliseconds)
+        lastTotalInputTokens:
+          type: integer
+        lastTotalOutputTokens:
+          type: integer
+
+    ProjectDetail:
+      allOf:
+        - $ref: '#/components/schemas/Project'
+        - type: object
+          properties:
+            recentSessions:
+              type: array
+              items:
+                $ref: '#/components/schemas/Session'
+              description: Most recent sessions (limit 10)
+            activitySummary:
+              type: object
+              properties:
+                totalMessages:
+                  type: integer
+                totalAgentSessions:
+                  type: integer
+                dateRange:
+                  type: object
+                  properties:
+                    start:
+                      type: string
+                      format: date-time
+                    end:
+                      type: string
+                      format: date-time
+
+    Session:
+      type: object
+      required:
+        - id
+        - projectPath
+        - startTime
+        - messageCount
+        - isAgent
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Session UUID
+        projectPath:
+          type: string
+          description: Decoded project path
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        messageCount:
+          type: integer
+          description: Number of messages (excludes file-history-snapshot entries)
+        model:
+          type: string
+          description: Model used (e.g., claude-3-5-sonnet-20240620)
+          example: 'claude-opus-4-5-20251101'
+        isAgent:
+          type: boolean
+          description: True if session ID starts with 'agent-'
+
+    SessionDetail:
+      allOf:
+        - $ref: '#/components/schemas/Session'
+        - type: object
+          properties:
+            metadata:
+              $ref: '#/components/schemas/SessionMetadata'
+            correlatedData:
+              $ref: '#/components/schemas/CorrelatedData'
+            duration:
+              type: integer
+              description: Session duration in milliseconds
+
+    SessionMetadata:
+      type: object
+      properties:
+        totalTokens:
+          type: integer
+        cost:
+          type: number
+          format: float
+        duration:
+          type: integer
+          description: Duration in milliseconds
+        model:
+          type: string
+        toolsUsed:
+          type: array
+          items:
+            type: string
+          description: List of tool names used in this session
+          example: ['Read', 'Write', 'Bash', 'Grep']
+
+    # -------------------------------------------------------------------------
+    # Messages
+    # -------------------------------------------------------------------------
+    Message:
+      type: object
+      required:
+        - uuid
+        - type
+        - timestamp
+        - sessionId
+        - content
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        parentUuid:
+          type: string
+          format: uuid
+          nullable: true
+        type:
+          type: string
+          enum: [user, assistant, file-history-snapshot, progress, result]
+        timestamp:
+          type: string
+          format: date-time
+        sessionId:
+          type: string
+          format: uuid
+        content:
+          $ref: '#/components/schemas/MessageContent'
+        model:
+          type: string
+          description: Model used (assistant messages only)
+        cwd:
+          type: string
+          description: Working directory at time of message
+        gitBranch:
+          type: string
+          description: Active git branch
+
+    MessageContent:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                $ref: '#/components/schemas/ContentBlock'
+
+    ContentBlock:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [text, thinking, tool_use, tool_result]
+        text:
+          type: string
+          description: Text content (for text blocks)
+        thinking:
+          type: string
+          description: Thinking/reasoning content (for thinking blocks)
+        name:
+          type: string
+          description: Tool name (for tool_use blocks)
+        input:
+          type: object
+          description: Tool input parameters (for tool_use blocks)
+        tool_use_id:
+          type: string
+          description: Tool use ID linking tool_use to tool_result
+        content:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+          description: Tool result content (for tool_result blocks)
+
+    # -------------------------------------------------------------------------
+    # Correlated Data
+    # -------------------------------------------------------------------------
+    CorrelatedData:
+      type: object
+      properties:
+        todos:
+          type: array
+          items:
+            $ref: '#/components/schemas/TodoItem'
+        fileHistory:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileHistoryEntry'
+        debugLogs:
+          type: array
+          items:
+            type: string
+        linkedPlan:
+          type: string
+          nullable: true
+          description: Name of linked plan file
+        linkedSkill:
+          type: string
+          nullable: true
+
+    TodoItem:
+      type: object
+      required:
+        - content
+        - status
+      properties:
+        content:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, completed]
+
+    FileHistoryEntry:
+      type: object
+      required:
+        - path
+        - action
+        - timestamp
+      properties:
+        path:
+          type: string
+          description: File path
+        action:
+          type: string
+          enum: [read, write, edit]
+        timestamp:
+          type: string
+          format: date-time
+
+    # -------------------------------------------------------------------------
+    # Activity
+    # -------------------------------------------------------------------------
+    DailyProjectActivity:
+      type: object
+      required:
+        - date
+        - sessions
+        - totalMessages
+      properties:
+        date:
+          type: string
+          format: date
+          description: Calendar date (YYYY-MM-DD)
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+          description: Sessions that started on this day
+        totalMessages:
+          type: integer
+          description: Sum of messageCount across all sessions
+        sessionCount:
+          type: integer
+          description: Number of sessions on this day
+
+    # -------------------------------------------------------------------------
+    # Files
+    # -------------------------------------------------------------------------
+    FileContent:
+      type: object
+      required:
+        - type
+        - path
+      properties:
+        type:
+          type: string
+          enum: [file, directory]
+        path:
+          type: string
+          description: Absolute path to the file/directory
+        content:
+          type: string
+          description: File content (for type=file, max 100KB)
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              isDirectory:
+                type: boolean
+          description: Directory entries (for type=directory)
+        error:
+          type: string
+          description: Error message if file could not be read
+
+    # -------------------------------------------------------------------------
+    # Statistics
+    # -------------------------------------------------------------------------
+    Stats:
+      type: object
+      properties:
+        version:
+          type: integer
+        lastComputedDate:
+          type: string
+          format: date
+        totalSessions:
+          type: integer
+        totalMessages:
+          type: integer
+        firstSessionDate:
+          type: string
+          format: date-time
+        longestSession:
+          type: object
+          properties:
+            sessionId:
+              type: string
+              format: uuid
+            duration:
+              type: integer
+            messageCount:
+              type: integer
+        hourCounts:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Message counts by hour of day
+
+    DailyActivity:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        messageCount:
+          type: integer
+        sessionCount:
+          type: integer
+        toolCallCount:
+          type: integer
+
+    ModelUsage:
+      type: object
+      properties:
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+        cacheReadInputTokens:
+          type: integer
+        cacheCreationInputTokens:
+          type: integer
+
+    # -------------------------------------------------------------------------
+    # History
+    # -------------------------------------------------------------------------
+    HistoryEntry:
+      type: object
+      properties:
+        display:
+          type: string
+          description: User prompt text
+        timestamp:
+          type: integer
+          description: Unix timestamp (milliseconds)
+        project:
+          type: string
+          description: Project path
+        pastedContents:
+          type: object
+
+    # -------------------------------------------------------------------------
+    # Configuration
+    # -------------------------------------------------------------------------
+    Config:
+      type: object
+      description: |
+        Claude configuration from ~/.claude.json.
+        Sensitive fields are redacted.
+      properties:
+        numStartups:
+          type: integer
+        theme:
+          type: string
+          enum: [light, dark]
+        autoUpdates:
+          type: boolean
+        preferredNotifChannel:
+          type: string
+        projects:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ProjectConfig'
+
+    ProjectConfig:
+      type: object
+      properties:
+        hasTrustDialogAccepted:
+          type: boolean
+        lastSessionId:
+          type: string
+          format: uuid
+        lastCost:
+          type: number
+        lastAPIDuration:
+          type: integer
+        lastDuration:
+          type: integer
+        exampleFiles:
+          type: array
+          items:
+            type: string
+
+    Settings:
+      type: object
+      properties:
+        permissions:
+          type: object
+          properties:
+            allow:
+              type: array
+              items:
+                type: string
+            deny:
+              type: array
+              items:
+                type: string
+        model:
+          type: string
+        hooks:
+          type: object
+        enabledPlugins:
+          type: object
+          additionalProperties:
+            type: boolean
+
+    # -------------------------------------------------------------------------
+    # Common
+    # -------------------------------------------------------------------------
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Total number of items
+        limit:
+          type: integer
+          description: Items per page
+        offset:
+          type: integer
+          description: Current offset
+        hasMore:
+          type: boolean
+          description: Whether more items exist
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: 'NOT_FOUND'
+        message:
+          type: string
+          example: 'Resource not found'
+        details:
+          type: object
