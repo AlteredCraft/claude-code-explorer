@@ -24,9 +24,17 @@ interface SessionMetadata {
   model?: string;
 }
 
+interface FileHistoryEntry {
+  filePath: string;
+  backupFileName: string;
+  version: number;
+  backupTime?: string;
+  messageId?: string;
+}
+
 interface CorrelatedData {
   todos: { content: string; status: string }[];
-  fileHistory: { path: string; action: string; timestamp: string }[];
+  fileHistory: FileHistoryEntry[];
   debugLogs: string[];
   linkedPlan?: string;
   linkedSkill?: string;
@@ -191,9 +199,12 @@ export function SessionTabs({ messages, metadata, correlatedData, sessionId }: S
                           key={idx}
                           className="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-zinc-900 font-mono text-sm"
                         >
-                          <span className="truncate">{entry.path}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {entry.action}
+                          <div className="flex flex-col min-w-0">
+                            <span className="truncate">{entry.filePath}</span>
+                            <span className="text-xs text-zinc-500 truncate">{entry.backupFileName}</span>
+                          </div>
+                          <Badge variant="outline" className="text-xs shrink-0 ml-2">
+                            v{entry.version}
                           </Badge>
                         </div>
                       ))}

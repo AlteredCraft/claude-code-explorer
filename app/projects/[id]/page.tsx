@@ -1,10 +1,36 @@
-import { getProjectSessions } from '@/lib/claude-data';
-import { decodeFromUrl, decodeProjectPath, getDisplayPath, getProjectName } from '@/lib/path-utils';
+import { getProjectSessions } from '@/lib/api-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { SourcePath } from '@/components/source-path';
 import Link from 'next/link';
 import { ActivityTimeline } from '@/components/activity-timeline';
+
+function decodeFromUrl(str: string): string {
+  return decodeURIComponent(str);
+}
+
+function decodeProjectPath(encoded: string): string {
+  if (encoded.startsWith('-')) {
+    return '/' + encoded.slice(1).replace(/-/g, '/');
+  }
+  return encoded.replace(/-/g, '/');
+}
+
+function getDisplayPath(path: string): string {
+  // Approximate home detection
+  if (path.startsWith('/Users/') || path.startsWith('/home/')) {
+    const parts = path.split('/');
+    if (parts.length >= 3) {
+      return '~/' + parts.slice(3).join('/');
+    }
+  }
+  return path;
+}
+
+function getProjectName(path: string): string {
+  const parts = path.split('/');
+  return parts[parts.length - 1] || path;
+}
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -17,11 +43,19 @@ export default async function ProjectPage({ params }: PageProps) {
   const projectName = getProjectName(decodedPath);
   const displayPath = getDisplayPath(decodedPath);
 
-  const sessions = await getProjectSessions(encodedPath);
+  const response = await getProjectSessions(encodedPath);
+  const sessions = response.data;
 
   // Separate regular sessions from agent sessions
   const regularSessions = sessions.filter(s => !s.isAgent);
   const agentSessions = sessions.filter(s => s.isAgent);
+
+  // Convert string dates to Date objects for the ActivityTimeline component
+  const sessionsForTimeline = regularSessions.map(s => ({
+    ...s,
+    startTime: new Date(s.startTime),
+    endTime: s.endTime ? new Date(s.endTime) : undefined,
+  }));
 
   return (
     <div className="space-y-6">
@@ -81,7 +115,7 @@ export default async function ProjectPage({ params }: PageProps) {
         </CardHeader>
         <CardContent>
           <ActivityTimeline
-            sessions={regularSessions}
+            sessions={sessionsForTimeline}
             projectId={id}
           />
         </CardContent>
@@ -159,7 +193,8 @@ export default async function ProjectPage({ params }: PageProps) {
   );
 }
 
-function formatSessionTime(date: Date): string {
+function formatSessionTime(dateStr: string): string {
+  const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / 86400000);

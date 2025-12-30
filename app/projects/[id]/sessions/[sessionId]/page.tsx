@@ -1,11 +1,25 @@
-import { getSessionMessages, getSessionMetadata } from '@/lib/claude-data';
-import { correlateSessionData } from '@/lib/session-correlator';
-import { decodeFromUrl, decodeProjectPath, getProjectName } from '@/lib/path-utils';
+import { getSession, getSessionMessages } from '@/lib/api-client';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { SourcePath } from '@/components/source-path';
 import { SessionTabs } from '@/components/session-tabs';
 import Link from 'next/link';
+
+function decodeFromUrl(str: string): string {
+  return decodeURIComponent(str);
+}
+
+function decodeProjectPath(encoded: string): string {
+  if (encoded.startsWith('-')) {
+    return '/' + encoded.slice(1).replace(/-/g, '/');
+  }
+  return encoded.replace(/-/g, '/');
+}
+
+function getProjectName(path: string): string {
+  const parts = path.split('/');
+  return parts[parts.length - 1] || path;
+}
 
 interface PageProps {
   params: Promise<{ id: string; sessionId: string }>;
@@ -17,34 +31,24 @@ export default async function SessionPage({ params }: PageProps) {
   const decodedPath = decodeProjectPath(encodedPath);
   const projectName = getProjectName(decodedPath);
 
-  const [messages, metadata, correlatedData] = await Promise.all([
-    getSessionMessages(encodedPath, sessionId),
-    getSessionMetadata(encodedPath, sessionId),
-    correlateSessionData(sessionId),
+  const [sessionDetail, messagesResponse] = await Promise.all([
+    getSession(encodedPath, sessionId),
+    getSessionMessages(encodedPath, sessionId, { limit: 100 }),
   ]);
+
+  const messages = messagesResponse.data;
 
   // Filter to just user and assistant messages for the conversation view
   const conversationMessages = messages.filter(
     m => m.type === 'user' || m.type === 'assistant'
   );
 
-  const startTime = messages.length > 0 ? messages[0].timestamp : new Date();
-  const endTime = messages.length > 0 ? messages[messages.length - 1].timestamp : undefined;
-  const duration = endTime ? endTime.getTime() - startTime.getTime() : 0;
+  const startTime = new Date(sessionDetail.startTime);
+  const endTime = sessionDetail.endTime ? new Date(sessionDetail.endTime) : undefined;
+  const duration = endTime ? endTime.getTime() - startTime.getTime() : (sessionDetail.duration || 0);
 
-  // Serialize data for client component
-  const serializedMessages = messages.map(m => ({
-    ...m,
-    timestamp: m.timestamp.toISOString(),
-  }));
-
-  const serializedCorrelatedData = {
-    ...correlatedData,
-    fileHistory: correlatedData.fileHistory.map(f => ({
-      ...f,
-      timestamp: f.timestamp.toISOString(),
-    })),
-  };
+  const metadata = sessionDetail.metadata;
+  const correlatedData = sessionDetail.correlatedData;
 
   return (
     <div className="space-y-6">
@@ -125,9 +129,9 @@ export default async function SessionPage({ params }: PageProps) {
 
       {/* Main Content - Client Component for interactive tabs */}
       <SessionTabs
-        messages={serializedMessages}
+        messages={messages}
         metadata={metadata}
-        correlatedData={serializedCorrelatedData}
+        correlatedData={correlatedData}
         sessionId={sessionId}
       />
     </div>

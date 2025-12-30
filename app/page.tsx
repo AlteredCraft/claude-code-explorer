@@ -1,5 +1,6 @@
-import { getProjects, getProjectDisplayInfo } from '@/lib/claude-data';
-import { encodeForUrl } from '@/lib/path-utils';
+export const dynamic = 'force-dynamic'; // Disable static pre-rendering
+
+import { getProjects } from '@/lib/api-client';
 import { SourcePath } from '@/components/source-path';
 import {
   Table,
@@ -13,9 +14,14 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 
-function formatRelativeTime(date: Date | undefined): string {
-  if (!date) return 'Never';
+function encodeForUrl(str: string): string {
+  return encodeURIComponent(str);
+}
 
+function formatRelativeTime(dateStr: string | undefined): string {
+  if (!dateStr) return 'Never';
+
+  const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -30,27 +36,32 @@ function formatRelativeTime(date: Date | undefined): string {
   return date.toLocaleDateString();
 }
 
-function formatCost(cost: number | undefined): string {
-  if (cost === undefined) return '-';
+function formatCost(cost: number | undefined | null): string {
+  if (cost === undefined || cost === null) return '-';
   return `$${cost.toFixed(2)}`;
 }
 
-function formatTokens(tokens: number | undefined): string {
-  if (tokens === undefined) return '-';
+function formatTokens(tokens: number | undefined | null): string {
+  if (tokens === undefined || tokens === null) return '-';
   if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
   if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
   return tokens.toString();
 }
 
 export default async function HomePage() {
-  const projects = await getProjects();
+  const response = await getProjects();
+  const projects = response.data;
+
+  // Split into projects with sessions and config-only projects
+  const projectsWithSessions = projects.filter(p => p.hasSessionData);
+  const configOnlyProjects = projects.filter(p => !p.hasSessionData);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Projects</h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
-          {projects.length} projects found
+          {projectsWithSessions.length} projects with sessions, {configOnlyProjects.length} initialized only
         </p>
         <div className="flex items-center gap-2 mt-1">
           <SourcePath path="~/.claude.json" />
@@ -61,7 +72,7 @@ export default async function HomePage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">All Projects</CardTitle>
+          <CardTitle className="text-base">Projects</CardTitle>
           <CardDescription>
             Click a project to view its session timeline
           </CardDescription>
@@ -78,8 +89,7 @@ export default async function HomePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {projects.map((project) => {
-                const info = getProjectDisplayInfo(project);
+              {projectsWithSessions.map((project) => {
                 return (
                   <TableRow key={project.encodedPath} className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
                     <TableCell>
@@ -88,10 +98,10 @@ export default async function HomePage() {
                         className="block"
                       >
                         <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                          {info.name}
+                          {project.name}
                         </div>
                         <div className="text-xs text-zinc-500 dark:text-zinc-500 font-mono">
-                          {info.displayPath}
+                          {project.displayPath}
                         </div>
                       </Link>
                     </TableCell>
@@ -128,6 +138,50 @@ export default async function HomePage() {
           </Table>
         </CardContent>
       </Card>
+
+      {configOnlyProjects.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Other Projects</CardTitle>
+            <CardDescription>
+              Initialized but no session data recorded
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[300px]">Project</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Last Cost</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {configOnlyProjects.map((project) => (
+                  <TableRow key={project.encodedPath} className="opacity-60">
+                    <TableCell>
+                      <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                        {project.name}
+                      </div>
+                      <div className="text-xs text-zinc-500 dark:text-zinc-500 font-mono">
+                        {project.displayPath}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-zinc-500">No sessions</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="text-sm font-mono text-zinc-600 dark:text-zinc-400">
+                        {formatCost(project.lastCost)}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
