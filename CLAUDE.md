@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Claude Explorer is a web application for exploring `~/.claude/` session context and metadata. It provides session-centric exploration: given a session ID, see the conversation, metadata, files touched, tools used, and correlated data across directories.
 
 The application uses a **client-API architecture**:
-- **API Server** (Express.js) - Standalone REST API that reads from `~/.claude/`
+- **API Server** (Python/FastAPI) - Standalone REST API that reads from `~/.claude/`
 - **Web Client** (Next.js) - Frontend that consumes the API
 
 ## Development Commands
@@ -37,39 +37,53 @@ npm run start:all
 The API can run independently without the client:
 
 ```bash
-cd api
-npm install
-npm run dev    # Development with hot reload
-npm run build  # Build for production
-npm run start  # Run production build
+cd api-py
+uv sync                                    # Install dependencies
+uv run uvicorn src.main:app --reload       # Development with hot reload
+uv run uvicorn src.main:app                # Production
 ```
 
 API runs on `http://localhost:3001/api/v1`
+
+Interactive API documentation available at:
+- Swagger UI: `http://localhost:3001/api/v1/docs`
+- ReDoc: `http://localhost:3001/api/v1/redoc`
+- OpenAPI JSON: `http://localhost:3001/api/v1/openapi.json`
 
 ## Architecture
 
 ### Data Flow
 
 ```
-~/.claude/ filesystem → API Server (Express) → REST API → Next.js Client → UI
+~/.claude/ filesystem → API Server (FastAPI) → REST API → Next.js Client → UI
 ```
 
-### API Server (`/api`)
+### API Server (`/api-py`)
 
-The standalone Express.js API server:
+The standalone Python FastAPI server:
 
-- `api/src/index.ts` - Server entry point
-- `api/src/routes/` - Route handlers for each resource:
-  - `projects.ts` - Projects, sessions, messages, activity
-  - `correlated.ts` - Todos, file history, debug logs
-  - `plans.ts` - Plan documents
-  - `skills.ts` - Skills
-  - `stats.ts` - Usage statistics
-  - `history.ts` - Prompt history
-  - `files.ts` - Browse ~/.claude/ filesystem
-  - `config.ts` - Configuration (read-only)
+- `api-py/src/main.py` - FastAPI application entry point
+- `api-py/src/models.py` - Pydantic models (auto-generates OpenAPI schema)
+- `api-py/src/utils.py` - Utility functions
+- `api-py/src/routes/` - Route handlers for each resource:
+  - `projects.py` - Projects, sessions, messages, activity
+  - `correlated.py` - Todos, file history, debug logs, sub-agents, environment
+  - `plans.py` - Plan documents
+  - `skills.py` - Skills with YAML frontmatter parsing
+  - `commands.py` - Slash commands
+  - `plugins.py` - Installed plugins
+  - `shell_snapshots.py` - Shell snapshots
+  - `stats.py` - Usage statistics
+  - `history.py` - Prompt history
+  - `files.py` - Browse ~/.claude/ filesystem
+  - `config.py` - Configuration (read-only, sensitive data redacted)
 
-API specification: `docs/api-spec.yaml` (OpenAPI 3.0)
+OpenAPI specification is auto-generated from Pydantic models at `/api/v1/openapi.json`
+
+### Legacy TypeScript API (`/api`)
+
+The original Express.js API is still available for reference:
+- Run with `npm run dev:api:ts` or `npm run start:api:ts`
 
 ### Client Libraries
 
@@ -90,8 +104,9 @@ Route params use URL-encoded project paths (the `-Users-sam-...` format from `~/
 
 **Session UUID** is the universal key that correlates data across directories:
 - `projects/{project-path}/{sessionId}.jsonl` - conversation transcript
-- `file-history/{sessionId}/` - file backups
+- `file-history/{sessionId}/` - file backups (versioned: `{hash}@v{version}`)
 - `todos/{sessionId}-agent-*.json` - task lists
+- `session-env/{sessionId}/` - environment variables
 - `debug/{sessionId}.txt` - debug logs
 
 ### JSONL Parsing
@@ -99,7 +114,7 @@ Route params use URL-encoded project paths (the `-Users-sam-...` format from `~/
 Session files are JSON Lines format. Each line can be:
 - `type: "user"` - User message with `message.content`
 - `type: "assistant"` - Assistant response with `message.content`, `toolUseMessages`
-- `type: "file-history-snapshot"` - File backup references (skip for message counts)
+- `type: "file-history-snapshot"` - File backup references linking to `file-history/` backups
 
 ### UI Components
 
@@ -120,4 +135,15 @@ NEXT_PUBLIC_API_URL=http://your-api-server:3001/api/v1
 
 See `docs/claude-code-data-structures.md` for comprehensive documentation of the `~/.claude/` directory format.
 
-See `docs/api-spec.yaml` for the complete REST API specification.
+The API schema is auto-generated and available at the `/api/v1/openapi.json` endpoint.
+
+## API Validation
+
+Validate the FastAPI-generated OpenAPI spec against `docs/api-spec.yaml` (source of truth):
+
+```bash
+cd api-py
+uv run python scripts/validate_openapi.py
+```
+
+The script compares paths, methods, and schemas between the specs.

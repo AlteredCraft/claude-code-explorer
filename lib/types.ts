@@ -20,6 +20,8 @@ export interface Session {
   messageCount: number;
   model?: string;
   isAgent: boolean;
+  parentSessionId?: string | null;
+  subAgentIds?: string[];
 }
 
 export interface Message {
@@ -76,9 +78,11 @@ export interface TodoItem {
 }
 
 export interface FileHistoryEntry {
-  path: string;
-  action: 'read' | 'write' | 'edit';
-  timestamp: Date;
+  filePath: string;
+  backupFileName: string;
+  version: number;
+  backupTime?: string;
+  messageId?: string;
 }
 
 export interface ProjectConfig {

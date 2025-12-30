@@ -85,7 +85,8 @@ async function findSessionTodos(sessionId: string): Promise<TodoItem[]> {
 
 /**
  * Find file history for a session
- * File history is stored in ~/.claude/file-history/[session-uuid]/
+ * File history backup files are stored in ~/.claude/file-history/[session-uuid]/
+ * Format: {fileHash}@v{version}
  */
 async function findSessionFileHistory(sessionId: string): Promise<FileHistoryEntry[]> {
   const claudeDir = getClaudeDir();
@@ -96,49 +97,22 @@ async function findSessionFileHistory(sessionId: string): Promise<FileHistoryEnt
     const entries: FileHistoryEntry[] = [];
 
     for (const file of files) {
-      if (file.endsWith('.json') || file.endsWith('.jsonl')) {
-        try {
-          const content = await readFile(join(fileHistoryDir, file), 'utf-8');
-
-          // Handle JSONL
-          if (file.endsWith('.jsonl')) {
-            const lines = content.trim().split('\n');
-            for (const line of lines) {
-              try {
-                const data = JSON.parse(line);
-                if (data.path) {
-                  entries.push({
-                    path: data.path,
-                    action: data.action || 'read',
-                    timestamp: new Date(data.timestamp || Date.now()),
-                  });
-                }
-              } catch {
-                // Skip malformed lines
-              }
-            }
-          } else {
-            // Handle JSON
-            const data = JSON.parse(content);
-            if (Array.isArray(data)) {
-              for (const item of data) {
-                if (item.path) {
-                  entries.push({
-                    path: item.path,
-                    action: item.action || 'read',
-                    timestamp: new Date(item.timestamp || Date.now()),
-                  });
-                }
-              }
-            }
-          }
-        } catch {
-          // Skip malformed files
-        }
+      // Backup files have format: {hash}@v{version}
+      const match = file.match(/^(.+)@v(\d+)$/);
+      if (match) {
+        entries.push({
+          filePath: `(backup ${match[1]})`,
+          backupFileName: file,
+          version: parseInt(match[2], 10),
+        });
       }
     }
 
-    return entries.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    return entries.sort((a, b) => {
+      const pathCompare = a.filePath.localeCompare(b.filePath);
+      if (pathCompare !== 0) return pathCompare;
+      return a.version - b.version;
+    });
   } catch {
     return [];
   }

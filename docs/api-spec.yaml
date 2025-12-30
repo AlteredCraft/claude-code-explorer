@@ -300,6 +300,35 @@ paths:
               schema:
                 $ref: '#/components/schemas/CorrelatedData'
 
+  /sessions/{sessionId}/sub-agents:
+    get:
+      operationId: getSessionSubAgents
+      summary: Get sub-agent sessions
+      description: |
+        Returns all sub-agent sessions spawned by this session via the Task tool.
+        For agent sessions, returns the parent session relationship.
+      tags:
+        - Correlated Data
+      parameters:
+        - $ref: '#/components/parameters/sessionIdPath'
+      responses:
+        '200':
+          description: Sub-agent session list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  parentSessionId:
+                    type: string
+                    nullable: true
+                    description: Parent session ID (if this is an agent session)
+                  subAgents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Session'
+                    description: List of sub-agent sessions spawned by this session
+
   /sessions/{sessionId}/todos:
     get:
       operationId: getSessionTodos
@@ -326,7 +355,12 @@ paths:
     get:
       operationId: getSessionFileHistory
       summary: Get file history for a session
-      description: Returns file operations (read/write/edit) from `~/.claude/file-history/{sessionId}/`
+      description: |
+        Returns file backup entries from session transcripts. Each entry maps an original
+        file path to a versioned backup in `~/.claude/file-history/{sessionId}/`.
+
+        The backup files are referenced by `file-history-snapshot` messages in the session
+        transcript, which contain `trackedFileBackups` mapping file paths to backup file names.
       tags:
         - Correlated Data
       parameters:
@@ -343,6 +377,40 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/FileHistoryEntry'
+
+  /sessions/{sessionId}/file-history/{backupFileName}:
+    get:
+      operationId: getFileBackupContent
+      summary: Get backup file content
+      description: Returns the raw content of a file backup from `~/.claude/file-history/{sessionId}/`
+      tags:
+        - Correlated Data
+      parameters:
+        - $ref: '#/components/parameters/sessionIdPath'
+        - name: backupFileName
+          in: path
+          required: true
+          description: Backup file name (e.g., "59e0b9c43163e850@v1")
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Backup file content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backupFileName:
+                    type: string
+                  content:
+                    type: string
+                    description: Raw file content
+                  size:
+                    type: integer
+                    description: File size in bytes
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /sessions/{sessionId}/debug-logs:
     get:
@@ -366,6 +434,87 @@ paths:
                     items:
                       type: string
                       description: Debug log content (truncated to 5000 chars per file)
+
+  /sessions/{sessionId}/environment:
+    get:
+      operationId: getSessionEnvironment
+      summary: Get session environment variables
+      description: Returns environment variables from `~/.claude/session-env/{sessionId}/`
+      tags:
+        - Correlated Data
+      parameters:
+        - $ref: '#/components/parameters/sessionIdPath'
+      responses:
+        '200':
+          description: Environment variables
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties:
+                      type: string
+                    description: Key-value pairs of environment variables
+
+  /shell-snapshots:
+    get:
+      operationId: listShellSnapshots
+      summary: List shell snapshots
+      description: Returns list of shell snapshots from `~/.claude/shell-snapshots/`
+      tags:
+        - Correlated Data
+      responses:
+        '200':
+          description: List of shell snapshots
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        filename:
+                          type: string
+                        shell:
+                          type: string
+                          description: Shell type (zsh, bash, etc.)
+                        timestamp:
+                          type: integer
+                          description: Unix timestamp from filename
+
+  /shell-snapshots/{filename}:
+    get:
+      operationId: getShellSnapshot
+      summary: Get shell snapshot content
+      description: Returns content of a shell snapshot
+      tags:
+        - Correlated Data
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          description: Snapshot filename
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Shell snapshot content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  filename:
+                    type: string
+                  content:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   # =============================================================================
   # PLANS & SKILLS
@@ -422,16 +571,19 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /skills:
+  # =============================================================================
+  # COMMANDS
+  # =============================================================================
+  /commands:
     get:
-      operationId: listSkills
-      summary: List all skills
-      description: Returns all skill names from `~/.claude/skills/`
+      operationId: listCommands
+      summary: List all commands
+      description: Returns all slash commands from `~/.claude/commands/`
       tags:
-        - Correlated Data
+        - Configuration
       responses:
         '200':
-          description: List of skill names
+          description: List of commands
           content:
             application/json:
               schema:
@@ -440,7 +592,124 @@ paths:
                   data:
                     type: array
                     items:
-                      type: string
+                      $ref: '#/components/schemas/Command'
+
+  /commands/{name}:
+    get:
+      operationId: getCommand
+      summary: Get command content
+      description: Returns the content of a specific command
+      tags:
+        - Configuration
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Command name (without .md extension)
+          schema:
+            type: string
+            example: brainstorm
+      responses:
+        '200':
+          description: Command content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # =============================================================================
+  # PLUGINS
+  # =============================================================================
+  /plugins:
+    get:
+      operationId: listPlugins
+      summary: List all installed plugins
+      description: Returns all installed plugins from `~/.claude/plugins/installed_plugins.json`
+      tags:
+        - Configuration
+      responses:
+        '200':
+          description: List of installed plugins
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Plugin'
+
+  /plugins/{name}:
+    get:
+      operationId: getPlugin
+      summary: Get plugin details
+      description: Returns details for a specific plugin
+      tags:
+        - Configuration
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Plugin name (format name@marketplace)
+          schema:
+            type: string
+            example: artifact-workflow@alteredcraft-plugins
+      responses:
+        '200':
+          description: Plugin details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plugin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /skills:
+    get:
+      operationId: listSkills
+      summary: List all skills
+      description: Returns all skills from `~/.claude/skills/` with basic metadata
+      tags:
+        - Configuration
+      responses:
+        '200':
+          description: List of skills
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Skill'
+
+  /skills/{name}:
+    get:
+      operationId: getSkill
+      summary: Get skill details
+      description: Returns detailed information about a skill including SKILL.md content
+      tags:
+        - Configuration
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Skill directory name
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Skill details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Skill'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   # =============================================================================
   # STATISTICS
@@ -829,6 +1098,15 @@ components:
         isAgent:
           type: boolean
           description: True if session ID starts with 'agent-'
+        parentSessionId:
+          type: string
+          nullable: true
+          description: Parent session ID (for agent sessions spawned by Task tool)
+        subAgentIds:
+          type: array
+          items:
+            type: string
+          description: List of sub-agent session IDs spawned by this session
 
     SessionDetail:
       allOf:
@@ -988,19 +1266,27 @@ components:
     FileHistoryEntry:
       type: object
       required:
-        - path
-        - action
-        - timestamp
+        - filePath
+        - backupFileName
+        - version
       properties:
-        path:
+        filePath:
           type: string
-          description: File path
-        action:
+          description: Original file path (e.g., "README.md", "src/index.ts")
+        backupFileName:
           type: string
-          enum: [read, write, edit]
-        timestamp:
+          description: Backup file name in file-history directory (e.g., "59e0b9c43163e850@v1")
+        version:
+          type: integer
+          description: Version number of this backup
+        backupTime:
           type: string
           format: date-time
+          description: When the backup was created
+        messageId:
+          type: string
+          format: uuid
+          description: Message UUID that triggered this backup
 
     # -------------------------------------------------------------------------
     # Activity
@@ -1140,6 +1426,80 @@ components:
     # -------------------------------------------------------------------------
     # Configuration
     # -------------------------------------------------------------------------
+    Command:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Command name (filename without .md extension)
+        description:
+          type: string
+          description: Short description from YAML frontmatter
+        content:
+          type: string
+          description: Full markdown content including frontmatter
+
+    Plugin:
+      type: object
+      required:
+        - name
+        - version
+      properties:
+        name:
+          type: string
+          description: Plugin name (format name@marketplace)
+          example: artifact-workflow@alteredcraft-plugins
+        version:
+          type: string
+          description: Installed version
+        scope:
+          type: string
+          enum: [user, project]
+          description: Installation scope
+        installPath:
+          type: string
+          description: Path to installed plugin files
+        installedAt:
+          type: string
+          format: date-time
+          description: Installation timestamp
+        gitCommitSha:
+          type: string
+          description: Git commit SHA of installed version
+        skills:
+          type: array
+          items:
+            type: string
+          description: Skills provided by this plugin
+
+    Skill:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Skill directory name
+        description:
+          type: string
+          description: Description from SKILL.md frontmatter
+        allowedTools:
+          type: array
+          items:
+            type: string
+          description: Allowed tools from SKILL.md frontmatter
+        content:
+          type: string
+          description: Full SKILL.md content (only in detail view)
+        isSymlink:
+          type: boolean
+          description: Whether the skill directory is a symlink
+        realPath:
+          type: string
+          description: Resolved path if symlink
+
     Config:
       type: object
       description: |

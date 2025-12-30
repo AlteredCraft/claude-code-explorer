@@ -5,16 +5,18 @@
   "scripts": {
     "dev": "next dev",
     "dev:client": "next dev",
-    "dev:api": "npm --prefix api run dev",
+    "dev:api": "cd api-py && uv run uvicorn src.main:app --reload --port 3001",
+    "dev:api:ts": "npm --prefix api run dev",
     "dev:all": "npm run dev:api & npm run dev:client",
     "build": "next build",
     "build:api": "npm --prefix api run build",
     "build:all": "npm run build:api && npm run build",
     "start": "next start",
-    "start:api": "npm --prefix api run start",
+    "start:api": "cd api-py && uv run uvicorn src.main:app --port 3001",
+    "start:api:ts": "npm --prefix api run start",
     "start:all": "npm run start:api & npm run start",
     "lint": "eslint",
-    "install:all": "npm install && npm --prefix api install"
+    "install:all": "npm install && cd api-py && uv sync"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",

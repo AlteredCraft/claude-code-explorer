@@ -48,29 +48,44 @@ Session UUID: 31f3f224-f440-41ac-9244-b27ff054116d
 
 ## Tech Stack
 
+- **Python/FastAPI** - REST API server reading from `~/.claude/`
 - **Next.js 16** (App Router, Server Components)
-- **React 19** (Server Actions)
+- **React 19**
 - **shadcn/ui** (Radix-based components)
 - **Tailwind CSS**
 
 ## Getting Started
 
 ```bash
-# Install dependencies
-npm install
+# Install dependencies (requires uv for Python)
+npm run install:all
 
-# Run development server
-npm run dev
+# Run both API and client
+npm run dev:all
 
-# Open in browser
-open http://localhost:3000
+# Or run separately:
+npm run dev:api      # API at http://localhost:3001
+npm run dev:client   # Client at http://localhost:3000
 ```
+
+API documentation available at `http://localhost:3001/api/v1/docs`
 
 ## Project Structure
 
 ```
 claude-explorer/
-├── app/
+├── api-py/                         # Python FastAPI server
+│   ├── src/
+│   │   ├── main.py                 # FastAPI app entry point
+│   │   ├── models.py               # Pydantic models (OpenAPI schema)
+│   │   ├── utils.py                # Utility functions
+│   │   └── routes/                 # Route handlers
+│   │       ├── projects.py         # Projects, sessions, messages
+│   │       ├── correlated.py       # Todos, file history, sub-agents
+│   │       ├── stats.py            # Usage statistics
+│   │       └── ...                 # Other endpoints
+│   └── pyproject.toml              # Python dependencies (uv)
+├── app/                            # Next.js frontend
 │   ├── page.tsx                    # Projects list
 │   ├── projects/[id]/
 │   │   ├── page.tsx                # Activity timeline
@@ -82,20 +97,20 @@ claude-explorer/
 │   ├── activity-timeline.tsx       # Visual timeline
 │   └── session-tabs.tsx            # Session detail tabs
 ├── lib/
-│   ├── types.ts                    # TypeScript interfaces
-│   ├── claude-data.ts              # Read ~/.claude/ data
-│   ├── session-correlator.ts       # Correlate session across sources
-│   └── path-utils.ts               # Encode/decode project paths
+│   ├── api-client.ts               # Typed API client
+│   └── types.ts                    # TypeScript interfaces
 └── docs/
-    └── claude-code-data-structures.md  # Data format documentation
+    ├── api-spec.yaml               # OpenAPI specification (source of truth)
+    └── claude-code-data-structures.md
 ```
 
 ## How It Works
 
-1. **Server Components** read directly from `~/.claude/` filesystem
-2. **Path encoding** handles project paths (e.g., `/Users/sam/Projects/foo` → `-Users-sam-Projects-foo`)
-3. **JSONL parsing** extracts messages from session transcripts
+1. **FastAPI server** reads from `~/.claude/` filesystem and exposes REST API
+2. **Next.js client** consumes the API with typed fetch wrapper
+3. **Path encoding** handles project paths (e.g., `/Users/sam/Projects/foo` → `-Users-sam-Projects-foo`)
 4. **Session correlator** finds related data across directories by UUID
+5. **Pydantic models** auto-generate OpenAPI schema for type safety
 
 ## TODOs
 

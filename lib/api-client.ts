@@ -22,6 +22,7 @@ export interface Project {
   displayPath: string;
   name: string;
   sessionCount: number;
+  hasSessionData: boolean;
   lastSessionId?: string;
   lastActivity?: string;
   lastCost?: number;
@@ -51,6 +52,13 @@ export interface Session {
   messageCount: number;
   model?: string;
   isAgent: boolean;
+  parentSessionId?: string | null;
+  subAgentIds?: string[];
+}
+
+export interface SubAgentResponse {
+  parentSessionId: string | null;
+  subAgents: Session[];
 }
 
 export interface SessionDetail extends Session {
@@ -108,9 +116,17 @@ export interface TodoItem {
 }
 
 export interface FileHistoryEntry {
-  path: string;
-  action: 'read' | 'write' | 'edit';
-  timestamp: string;
+  filePath: string;
+  backupFileName: string;
+  version: number;
+  backupTime?: string;
+  messageId?: string;
+}
+
+export interface FileBackupContent {
+  backupFileName: string;
+  content: string;
+  size: number;
 }
 
 // Activity types
@@ -190,6 +206,7 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
 
   const response = await fetch(url, {
     ...options,
+    cache: 'no-store', // Disable Next.js caching for fresh data
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,
@@ -309,6 +326,10 @@ export async function getCorrelatedData(sessionId: string): Promise<CorrelatedDa
   return fetchApi(`/sessions/${sessionId}/correlated`);
 }
 
+export async function getSessionSubAgents(sessionId: string): Promise<SubAgentResponse> {
+  return fetchApi(`/sessions/${sessionId}/sub-agents`);
+}
+
 export async function getSessionTodos(sessionId: string): Promise<{ data: TodoItem[] }> {
   return fetchApi(`/sessions/${sessionId}/todos`);
 }
@@ -317,8 +338,34 @@ export async function getSessionFileHistory(sessionId: string): Promise<{ data: 
   return fetchApi(`/sessions/${sessionId}/file-history`);
 }
 
+export async function getFileBackupContent(
+  sessionId: string,
+  backupFileName: string
+): Promise<FileBackupContent> {
+  return fetchApi(`/sessions/${sessionId}/file-history/${encodeURIComponent(backupFileName)}`);
+}
+
 export async function getSessionDebugLogs(sessionId: string): Promise<{ data: string[] }> {
   return fetchApi(`/sessions/${sessionId}/debug-logs`);
+}
+
+export async function getSessionEnvironment(sessionId: string): Promise<{ data: Record<string, string> }> {
+  return fetchApi(`/sessions/${sessionId}/environment`);
+}
+
+// Shell Snapshots API
+export interface ShellSnapshot {
+  filename: string;
+  shell?: string;
+  timestamp?: number;
+}
+
+export async function getShellSnapshots(): Promise<{ data: ShellSnapshot[] }> {
+  return fetchApi('/shell-snapshots');
+}
+
+export async function getShellSnapshot(filename: string): Promise<{ filename: string; content: string }> {
+  return fetchApi(`/shell-snapshots/${encodeURIComponent(filename)}`);
 }
 
 // Plans API
@@ -331,8 +378,55 @@ export async function getPlan(planName: string): Promise<{ name: string; content
 }
 
 // Skills API
-export async function getSkills(): Promise<{ data: string[] }> {
+export interface Skill {
+  name: string;
+  description?: string;
+  allowedTools?: string[];
+  content?: string;
+  isSymlink?: boolean;
+  realPath?: string;
+}
+
+export async function getSkills(): Promise<{ data: Skill[] }> {
   return fetchApi('/skills');
+}
+
+export async function getSkill(name: string): Promise<Skill> {
+  return fetchApi(`/skills/${encodeURIComponent(name)}`);
+}
+
+// Commands API
+export interface Command {
+  name: string;
+  description?: string;
+  content?: string;
+}
+
+export async function getCommands(): Promise<{ data: Command[] }> {
+  return fetchApi('/commands');
+}
+
+export async function getCommand(name: string): Promise<Command> {
+  return fetchApi(`/commands/${encodeURIComponent(name)}`);
+}
+
+// Plugins API
+export interface Plugin {
+  name: string;
+  version: string;
+  scope?: string;
+  installPath?: string;
+  installedAt?: string;
+  gitCommitSha?: string;
+  skills?: string[];
+}
+
+export async function getPlugins(): Promise<{ data: Plugin[] }> {
+  return fetchApi('/plugins');
+}
+
+export async function getPlugin(name: string): Promise<Plugin> {
+  return fetchApi(`/plugins/${encodeURIComponent(name)}`);
 }
 
 // Stats API
