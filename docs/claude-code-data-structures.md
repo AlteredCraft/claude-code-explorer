@@ -1,6 +1,6 @@
 ---
 description: Documentation of the `~/.claude/` directory structure for dev journal integration.
-research_date: 2025-12-29
+research_date: 2026-01-01
 claude_code_version: 2.0.x
 sources: Local filesystem analysis + [Official Docs](https://code.claude.com/docs)
 ---
@@ -222,25 +222,84 @@ projects/
 }
 ```
 
+**Queue Operation** (prompt queuing):
+```json
+{
+  "type": "queue-operation",
+  "operation": "enqueue",
+  "timestamp": "2025-12-31T19:06:54.212Z",
+  "sessionId": "09abfbf5-851d-44f8-8a99-0efb3d91bfd6",
+  "content": "user prompt text..."
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `operation` | string | `"enqueue"` or `"dequeue"` |
+| `content` | string | The queued prompt text |
+| `sessionId` | string | Session this queue operation belongs to |
+
 #### Key Fields Reference
 
 | Field | Description |
 |-------|-------------|
-| `type` | Message type: `user`, `assistant`, `file-history-snapshot`, `tool` |
+| `type` | Message type: `user`, `assistant`, `file-history-snapshot`, `queue-operation` |
 | `uuid` | Unique identifier for this message |
 | `parentUuid` | Links response to its prompt (message chain) |
 | `sessionId` | Session identifier (links to other directories) |
-| `isSidechain` | Whether this is part of a side conversation branch |
+| `isSidechain` | Whether this is part of a side conversation branch (always `true` for sub-agents) |
 | `isMeta` | Whether this is a meta/system message (e.g., command output) |
 | `userType` | User type identifier (e.g., `"external"`) |
 | `cwd` | Working directory at time of message |
 | `gitBranch` | Active git branch |
 | `timestamp` | ISO 8601 timestamp |
-| `thinkingMetadata` | Extended thinking settings: `level`, `disabled` |
+| `thinkingMetadata` | Extended thinking settings: `level`, `disabled`, `triggers` (array) |
 | `toolUseMessages` | Array of tool calls and results |
 | `todos` | Task list state at this message |
+| `slug` | Whimsical session/agent name (e.g., `"sunny-hatching-neumann"`) |
+| `requestId` | API request ID (assistant messages only, e.g., `"req_011CWfFS..."`) |
+| `toolUseResult` | Short summary of tool result (user messages with tool results) |
+| `agentId` | Sub-agent short ID (e.g., `"ac2a8dd"`, matches `agent-{id}.jsonl` filename) |
 
 **Dev Journal Use**: **Primary source** - contains full context of what was accomplished, reasoning, tool usage, and file modifications.
+
+#### Message Content Structure
+
+The `message.content` field is polymorphic depending on message type:
+
+**User messages (regular prompt)**:
+```json
+"message": { "role": "user", "content": "Help me implement..." }
+```
+
+**User messages (tool results)**:
+```json
+"message": {
+  "role": "user",
+  "content": [
+    { "type": "tool_result", "tool_use_id": "toolu_01...", "content": "...", "is_error": false }
+  ]
+}
+```
+
+**Assistant messages** (array with multiple content types):
+```json
+"message": {
+  "role": "assistant",
+  "content": [
+    { "type": "text", "text": "I'll help you..." },
+    { "type": "thinking", "thinking": "...", "signature": "..." },
+    { "type": "tool_use", "id": "toolu_01...", "name": "Bash", "input": {...} }
+  ]
+}
+```
+
+| Content Type | Fields | Description |
+|--------------|--------|-------------|
+| `text` | `text` | Plain text response |
+| `thinking` | `thinking`, `signature` | Extended thinking content (when enabled) |
+| `tool_use` | `id`, `name`, `input` | Tool invocation |
+| `tool_result` | `tool_use_id`, `content`, `is_error` | Tool execution result |
 
 ---
 
@@ -335,6 +394,13 @@ debug/
 
 **Naming**: `{sessionId}.txt`
 
+**Format**: Plain text with timestamped debug entries:
+```
+2025-12-30T00:25:27.892Z [DEBUG] [SLOW OPERATION DETECTED] execSyncWithDefaults (21.7ms): security find-generic-password
+2025-12-30T00:25:27.920Z [DEBUG] Watching for changes in setting files /Users/sam/.claude...
+2025-12-30T00:25:27.952Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
+```
+
 ---
 
 ### `session-env/` - Environment Variables
@@ -347,6 +413,8 @@ session-env/
 ├── 31f3f224-f440-41ac-9244-b27ff054116d/
 └── ...
 ```
+
+**Note**: Directories are typically created empty. Environment data may be stored transiently or populated only under specific conditions (e.g., when using session-specific environment overrides).
 
 ---
 
@@ -624,7 +692,7 @@ These two files serve **complementary, non-duplicative** roles:
 └─────────────────────────────────────────────────────────────────────┘
          │
          ├──► projects/{project-path}/{sessionId}.jsonl
-         │         └── type: user/assistant/file-history-snapshot
+         │         └── type: user/assistant/file-history-snapshot/queue-operation
          │         └── uuid/parentUuid: message chain
          │         └── messageId: references file-history snapshots
          │
@@ -664,8 +732,14 @@ These two files serve **complementary, non-duplicative** roles:
               └──► Sub-agent: agent-a980ab1.jsonl
               │         └── Independent transcript
               │         └── Own file-history, todos possible
+              │         └── Messages have: agentId, slug, isSidechain: true
               │
               └──► Sub-agent: agent-acdf3e5.jsonl
+
+Sub-agent messages inherit the parent `sessionId` but add:
+- `agentId`: Short ID matching the filename (e.g., `"a980ab1"`)
+- `slug`: Whimsical name (e.g., `"sunny-hatching-neumann"`)
+- `isSidechain: true`: Always set for sub-agent messages
 ```
 
 ---
