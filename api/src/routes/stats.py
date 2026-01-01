@@ -1,4 +1,8 @@
-"""Stats routes for Claude Explorer API."""
+"""Stats routes for Claude Explorer API.
+
+Provides aggregated usage statistics from cached stats
+and computed metrics from session files.
+"""
 
 import json
 from datetime import datetime
@@ -13,8 +17,22 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 
 
 @router.get("/", response_model=Stats)
-async def get_stats():
-    """Get usage statistics."""
+async def get_stats() -> Stats:
+    """Get aggregated usage statistics.
+
+    Returns cached stats if available. If no cache exists, computes
+    basic stats by scanning session files.
+
+    Stats include:
+    - totalSessions: Count of all session files
+    - totalMessages: Count of all user/assistant messages
+    - firstSessionDate: Timestamp of oldest session
+    - longestSession: Session with most messages
+    - hourCounts: Message distribution by hour (0-23)
+
+    Returns:
+        Stats object with usage metrics
+    """
     claude_dir = get_claude_dir()
     stats_path = claude_dir / "stats-cache.json"
 
@@ -67,11 +85,33 @@ async def get_stats():
 
 @router.get("/daily", response_model=DailyActivityResponse)
 async def get_daily_stats(
-    start_date: str | None = Query(None, alias="startDate"),
-    end_date: str | None = Query(None, alias="endDate"),
-    limit: int = Query(30, le=100),
-):
-    """Get daily activity statistics."""
+    start_date: str | None = Query(
+        None,
+        alias="startDate",
+        description="Start of date range (YYYY-MM-DD format)"
+    ),
+    end_date: str | None = Query(
+        None,
+        alias="endDate",
+        description="End of date range (YYYY-MM-DD format)"
+    ),
+    limit: int = Query(
+        30,
+        le=100,
+        description="Maximum number of days to return (max 100)"
+    ),
+) -> DailyActivityResponse:
+    """Get daily activity breakdown.
+
+    Aggregates activity by date from session file modification times.
+    Counts messages, sessions, and tool calls per day.
+
+    Results are sorted by date descending (most recent first).
+
+    Returns:
+        data: List of DailyActivity objects with date, messageCount,
+              sessionCount, and toolCallCount
+    """
     claude_dir = get_claude_dir()
     projects_dir = claude_dir / "projects"
 
@@ -137,8 +177,22 @@ async def get_daily_stats(
 
 
 @router.get("/models", response_model=ModelUsageResponse)
-async def get_model_stats():
-    """Get model usage statistics."""
+async def get_model_stats() -> ModelUsageResponse:
+    """Get token usage aggregated by Claude model.
+
+    Sums lastModelUsage from all projects in config to show
+    total token consumption per model.
+
+    Token types:
+    - inputTokens: Tokens sent to the model
+    - outputTokens: Tokens received from the model
+    - cacheReadInputTokens: Tokens read from prompt cache (cost reduction)
+    - cacheCreationInputTokens: Tokens used to populate cache
+
+    Returns:
+        data: Dictionary mapping model ID (e.g., 'claude-opus-4-5-20251101')
+              to ModelUsage with token counts
+    """
     try:
         config_path = get_claude_config_path()
         content = config_path.read_text()

@@ -1,5 +1,5 @@
 def main():
-    print("Hello from api-py!")
+    print("Hello from api!")
 
 
 if __name__ == "__main__":

@@ -37,7 +37,7 @@ npm run start:all
 The API can run independently without the client:
 
 ```bash
-cd api-py
+cd api
 uv sync                                    # Install dependencies
 uv run uvicorn src.main:app --reload       # Development with hot reload
 uv run uvicorn src.main:app                # Production
@@ -58,14 +58,14 @@ Interactive API documentation available at:
 ~/.claude/ filesystem → API Server (FastAPI) → REST API → Next.js Client → UI
 ```
 
-### API Server (`/api-py`)
+### API Server (`/api`)
 
 The standalone Python FastAPI server:
 
-- `api-py/src/main.py` - FastAPI application entry point
-- `api-py/src/models.py` - Pydantic models (auto-generates OpenAPI schema)
-- `api-py/src/utils.py` - Utility functions
-- `api-py/src/routes/` - Route handlers for each resource:
+- `api/src/main.py` - FastAPI application entry point
+- `api/src/models.py` - Pydantic models (auto-generates OpenAPI schema)
+- `api/src/utils.py` - Utility functions
+- `api/src/routes/` - Route handlers for each resource:
   - `projects.py` - Projects, sessions, messages, activity
   - `correlated.py` - Todos, file history, debug logs, sub-agents, environment
   - `plans.py` - Plan documents
@@ -142,7 +142,7 @@ The API schema is auto-generated and available at the `/api/v1/openapi.json` end
 Validate the FastAPI-generated OpenAPI spec against `docs/api-spec.yaml` (source of truth):
 
 ```bash
-cd api-py
+cd api
 uv run python scripts/validate_openapi.py
 ```
 

@@ -220,7 +220,7 @@ def main():
     # Paths
     repo_root = Path(__file__).parent.parent.parent
     source_spec_path = repo_root / "docs" / "api-spec.yaml"
-    generated_spec_path = repo_root / "api-py" / "generated-openapi.json"
+    generated_spec_path = repo_root / "api" / "generated-openapi.json"
 
     # Check if we need to fetch the generated spec
     if not generated_spec_path.exists():

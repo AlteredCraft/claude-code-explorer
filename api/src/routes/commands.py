@@ -1,8 +1,12 @@
-"""Commands routes for Claude Explorer API."""
+"""Commands routes for Claude Explorer API.
+
+Commands are simple slash commands stored as markdown files with YAML
+frontmatter. Invoked with /command-name.
+"""
 
 from urllib.parse import unquote
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path
 
 from ..models import Command
 from ..utils import get_claude_dir, parse_yaml_frontmatter
@@ -28,7 +32,15 @@ async def get_command_info(file_path, name: str) -> dict:
 
 @router.get("/")
 async def list_commands() -> dict[str, list[Command]]:
-    """List all commands."""
+    """List all custom slash commands.
+
+    Returns commands from ~/.claude/commands/. Each command is a markdown
+    file with optional YAML frontmatter defining name and description.
+    Commands are invoked in Claude Code with /command-name.
+
+    Returns:
+        data: List of Command objects (content excluded for brevity)
+    """
     claude_dir = get_claude_dir()
     commands_dir = claude_dir / "commands"
 
@@ -48,8 +60,26 @@ async def list_commands() -> dict[str, list[Command]]:
 
 
 @router.get("/{name}", response_model=Command)
-async def get_command(name: str):
-    """Get command details."""
+async def get_command(
+    name: str = Path(
+        description="Command name (filename without .md extension, e.g., 'brainstorm')"
+    )
+) -> Command:
+    """Get a specific command with full content.
+
+    Returns command details including the full markdown content and
+    parsed YAML frontmatter (name, description).
+
+    Args:
+        name: Command name without .md extension
+
+    Returns:
+        Command object with name, description, and full markdown content
+
+    Raises:
+        400: Invalid command name (path traversal attempt)
+        404: Command not found
+    """
     name = unquote(name)
     claude_dir = get_claude_dir()
 

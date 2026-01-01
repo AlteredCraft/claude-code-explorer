@@ -1,4 +1,8 @@
-"""History routes for Claude Explorer API."""
+"""History routes for Claude Explorer API.
+
+Provides access to prompt history - a chronological log of all user
+prompts across projects without full conversation context.
+"""
 
 from fastapi import APIRouter, Query
 
@@ -10,14 +14,48 @@ router = APIRouter(prefix="/history", tags=["history"])
 
 @router.get("/", response_model=HistoryResponse)
 async def get_history(
-    project: str | None = Query(None),
-    start_date: str | None = Query(None, alias="startDate"),
-    end_date: str | None = Query(None, alias="endDate"),
-    search: str | None = Query(None),
-    limit: int = Query(50, le=100),
-    offset: int = Query(0, ge=0),
-):
-    """Get prompt history."""
+    project: str | None = Query(
+        None,
+        description="Filter to prompts from projects containing this path substring"
+    ),
+    start_date: str | None = Query(
+        None,
+        alias="startDate",
+        description="Filter prompts on or after this date (ISO 8601 format, e.g., '2024-01-15')"
+    ),
+    end_date: str | None = Query(
+        None,
+        alias="endDate",
+        description="Filter prompts on or before this date (ISO 8601 format)"
+    ),
+    search: str | None = Query(
+        None,
+        description="Filter prompts containing this text (case-insensitive)"
+    ),
+    limit: int = Query(
+        50,
+        le=100,
+        description="Maximum number of prompts to return (max 100)"
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Number of prompts to skip for pagination"
+    ),
+) -> HistoryResponse:
+    """Get prompt history across all sessions.
+
+    Returns history entries sorted by timestamp descending (most recent
+    first). Each entry contains the prompt text, timestamp, project path,
+    and any pasted content.
+
+    This provides a quick activity timeline without loading full
+    session transcripts.
+
+    Returns:
+        data: List of HistoryEntry objects
+        meta: Pagination metadata with total, limit, offset, hasMore
+    """
     claude_dir = get_claude_dir()
     history_path = claude_dir / "history.jsonl"
 

@@ -74,7 +74,7 @@ API documentation available at `http://localhost:3001/api/v1/docs`
 
 ```
 claude-explorer/
-├── api-py/                         # Python FastAPI server
+├── api/                         # Python FastAPI server
 │   ├── src/
 │   │   ├── main.py                 # FastAPI app entry point
 │   │   ├── models.py               # Pydantic models (OpenAPI schema)

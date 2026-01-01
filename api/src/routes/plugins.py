@@ -1,9 +1,13 @@
-"""Plugins routes for Claude Explorer API."""
+"""Plugins routes for Claude Explorer API.
+
+Plugins are installed extensions from marketplaces. The plugin registry
+tracks installation metadata including version, scope, and provided skills.
+"""
 
 import json
 from urllib.parse import unquote
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path
 
 from ..models import Plugin
 from ..utils import get_claude_dir
@@ -48,7 +52,18 @@ async def get_plugin_skills(plugin_name: str, install_path: str | None) -> list[
 
 @router.get("/")
 async def list_plugins() -> dict[str, list[Plugin]]:
-    """List all plugins."""
+    """List all installed plugins.
+
+    Each plugin includes metadata from the registry and a list of
+    skills provided by the plugin.
+
+    Plugin names use format: plugin-name@marketplace
+    (e.g., 'artifact-workflow@alteredcraft-plugins').
+
+    Returns:
+        data: List of Plugin objects with name, version, scope, installPath,
+              installedAt, gitCommitSha, and skills
+    """
     plugins = await get_installed_plugins()
 
     result = []
@@ -70,8 +85,25 @@ async def list_plugins() -> dict[str, list[Plugin]]:
 
 
 @router.get("/{name}", response_model=Plugin)
-async def get_plugin(name: str):
-    """Get plugin details."""
+async def get_plugin(
+    name: str = Path(
+        description="Plugin identifier in format 'plugin-name@marketplace' (e.g., 'artifact-workflow@alteredcraft-plugins')"
+    )
+) -> Plugin:
+    """Get a specific plugin's details.
+
+    Returns plugin metadata including version, installation scope,
+    file path, install timestamp, git commit, and provided skills.
+
+    Args:
+        name: Plugin identifier (URL-encoded if contains special characters)
+
+    Returns:
+        Plugin object with full metadata and skills list
+
+    Raises:
+        404: Plugin not found
+    """
     name = unquote(name)
     plugins = await get_installed_plugins()
 

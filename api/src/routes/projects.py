@@ -1,5 +1,9 @@
+"""Projects and Sessions routes for Claude Explorer API.
 
-"""Projects and Sessions routes for Claude Explorer API."""
+Core routes for listing projects and sessions, viewing messages, and
+accessing project activity timelines. Projects are identified by their
+filesystem path with sessions stored as JSONL transcripts.
+"""
 
 import json
 from datetime import datetime
@@ -8,6 +12,7 @@ from typing import Literal
 from urllib.parse import unquote
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi import Path as PathParam
 
 from ..models import (
     ActivityResponse,
@@ -142,13 +147,47 @@ async def get_session_messages_raw(
 
 @router.get("/", response_model=PaginatedResponse[Project])
 async def list_projects(
-    sort_by: str = Query("lastActivity", alias="sortBy"),
-    sort_order: Literal["asc", "desc"] = Query("desc", alias="sortOrder"),
-    limit: int = Query(50, le=100),
-    offset: int = Query(0, ge=0),
-    path_prefix: list[str] = Query([], alias="pathPrefix"),
-):
-    """List all projects."""
+    sort_by: str = Query(
+        "lastActivity",
+        alias="sortBy",
+        description="Sort field: 'lastActivity' (default), 'name', or 'sessionCount'"
+    ),
+    sort_order: Literal["asc", "desc"] = Query(
+        "desc",
+        alias="sortOrder",
+        description="Sort direction: 'asc' or 'desc' (default)"
+    ),
+    limit: int = Query(
+        50,
+        le=100,
+        description="Maximum number of projects per page (max 100)"
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Number of projects to skip for pagination"
+    ),
+    path_prefix: list[str] = Query(
+        [],
+        alias="pathPrefix",
+        description="Filter to projects under these paths (supports ~ expansion). Can specify multiple."
+    ),
+) -> PaginatedResponse[Project]:
+    """List all projects with Claude Code session data.
+
+    Discovers projects from two sources:
+    1. Session directories (encoded paths)
+    2. Project entries in config
+
+    Projects may be:
+    - Normal: Has both session directory and config entry
+    - Orphan: Has session directory but no config entry (isOrphan=true)
+    - Config-only: Has config entry but no sessions (hasSessionData=false)
+
+    Returns:
+        data: List of Project objects with path, session count, activity info
+        meta: Pagination metadata
+    """
     claude_dir = get_claude_dir()
     projects_dir = claude_dir / "projects"
 
@@ -259,8 +298,25 @@ async def list_projects(
 
 
 @router.get("/{encoded_path}", response_model=ProjectDetail)
-async def get_project(encoded_path: str):
-    """Get project details."""
+async def get_project(
+    encoded_path: str = PathParam(
+        description="URL-encoded project path (e.g., '-Users-sam-Projects-my-app')"
+    )
+) -> ProjectDetail:
+    """Get detailed project information.
+
+    Returns project metadata along with recent sessions and activity summary.
+    The encoded path is the directory name format used for session storage.
+
+    Args:
+        encoded_path: URL-encoded project path from list_projects
+
+    Returns:
+        ProjectDetail with recentSessions (up to 10) and activitySummary
+
+    Raises:
+        404: Project directory not found
+    """
     decoded_encoded_path = unquote(encoded_path)
     claude_dir = get_claude_dir()
     project_dir = claude_dir / "projects" / decoded_encoded_path
@@ -329,8 +385,25 @@ async def get_project(encoded_path: str):
 
 
 @router.get("/{encoded_path}/config")
-async def get_project_config(encoded_path: str):
-    """Get raw config entry from ~/.claude.json for a project."""
+async def get_project_config(
+    encoded_path: str = PathParam(
+        description="URL-encoded project path"
+    )
+) -> dict:
+    """Get raw project config.
+
+    Returns the project-specific configuration entry including
+    allowedTools, lastSessionId, costs, and MCP server settings.
+
+    Args:
+        encoded_path: URL-encoded project path
+
+    Returns:
+        Object with 'path' (decoded) and 'config' (raw config entry)
+
+    Raises:
+        404: Project not found in config (orphan project)
+    """
     decoded_encoded_path = unquote(encoded_path)
     config = await get_claude_config()
     path_lookup = build_path_lookup(config)
@@ -351,14 +424,46 @@ sessions_router = APIRouter(prefix="/projects/{encoded_path}/sessions", tags=["s
 
 @sessions_router.get("/", response_model=PaginatedResponse[Session])
 async def list_sessions(
-    encoded_path: str,
-    type: Literal["regular", "agent", "all"] = Query("all"),
-    sort_by: str = Query("startTime", alias="sortBy"),
-    sort_order: Literal["asc", "desc"] = Query("desc", alias="sortOrder"),
-    limit: int = Query(50, le=100),
-    offset: int = Query(0, ge=0),
-):
-    """List sessions for a project."""
+    encoded_path: str = PathParam(
+        description="URL-encoded project path"
+    ),
+    type: Literal["regular", "agent", "all"] = Query(
+        "all",
+        description="Filter by session type: 'regular' (main sessions), 'agent' (sub-agents), or 'all' (default)"
+    ),
+    sort_by: str = Query(
+        "startTime",
+        alias="sortBy",
+        description="Sort field: 'startTime' (default)"
+    ),
+    sort_order: Literal["asc", "desc"] = Query(
+        "desc",
+        alias="sortOrder",
+        description="Sort direction: 'asc' or 'desc' (default)"
+    ),
+    limit: int = Query(
+        50,
+        le=100,
+        description="Maximum sessions per page (max 100)"
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Number of sessions to skip for pagination"
+    ),
+) -> PaginatedResponse[Session]:
+    """List sessions for a project.
+
+    Returns session transcripts for this project. Each .jsonl file
+    represents one session (main or sub-agent).
+
+    Sub-agent sessions have filenames starting with 'agent-' and are
+    spawned via the Task tool during main sessions.
+
+    Returns:
+        data: List of Session objects with id, timestamps, message count
+        meta: Pagination metadata
+    """
     decoded_encoded_path = unquote(encoded_path)
     config = await get_claude_config()
     path_lookup = build_path_lookup(config)
@@ -402,8 +507,32 @@ async def list_sessions(
 
 
 @sessions_router.get("/{session_id}", response_model=SessionDetail)
-async def get_session(encoded_path: str, session_id: str):
-    """Get session details."""
+async def get_session(
+    encoded_path: str = PathParam(
+        description="URL-encoded project path"
+    ),
+    session_id: str = PathParam(
+        description="Session UUID (e.g., '31f3f224-f440-41ac-9244-b27ff054116d') or agent ID (e.g., 'agent-a980ab1')"
+    )
+) -> SessionDetail:
+    """Get detailed session information.
+
+    Returns session metadata (model, tools used, duration) and all
+    correlated data (todos, file history, debug logs, linked plan/skill).
+
+    The session UUID is the universal correlation key that links
+    data across directories.
+
+    Args:
+        encoded_path: URL-encoded project path
+        session_id: Session UUID or agent-{shortId}
+
+    Returns:
+        SessionDetail with metadata and correlatedData
+
+    Raises:
+        404: Session not found
+    """
     decoded_encoded_path = unquote(encoded_path)
     config = await get_claude_config()
     path_lookup = build_path_lookup(config)
@@ -504,13 +633,42 @@ messages_router = APIRouter(
 
 @messages_router.get("/", response_model=PaginatedResponse[Message])
 async def list_messages(
-    encoded_path: str,
-    session_id: str,
-    type: Literal["user", "assistant", "all"] = Query("all"),
-    limit: int = Query(50, le=100),
-    offset: int = Query(0, ge=0),
-):
-    """List messages for a session."""
+    encoded_path: str = PathParam(
+        description="URL-encoded project path"
+    ),
+    session_id: str = PathParam(
+        description="Session UUID or agent ID"
+    ),
+    type: Literal["user", "assistant", "all"] = Query(
+        "all",
+        description="Filter by message type: 'user', 'assistant', or 'all' (default)"
+    ),
+    limit: int = Query(
+        50,
+        le=100,
+        description="Maximum messages per page (max 100)"
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Number of messages to skip for pagination"
+    ),
+) -> PaginatedResponse[Message]:
+    """List messages in a session.
+
+    Returns messages from the session transcript JSONL file.
+    Messages are returned in chronological order.
+
+    Message types:
+    - user: User prompts with content as string
+    - assistant: Claude responses with content as array of ContentBlocks
+
+    Note: file-history-snapshot entries are excluded from this endpoint.
+
+    Returns:
+        data: List of Message objects
+        meta: Pagination metadata
+    """
     decoded_encoded_path = unquote(encoded_path)
     messages = await get_session_messages_raw(decoded_encoded_path, session_id)
 
@@ -536,8 +694,30 @@ async def list_messages(
 
 
 @messages_router.get("/{message_id}")
-async def get_message(encoded_path: str, session_id: str, message_id: str):
-    """Get a specific message."""
+async def get_message(
+    encoded_path: str = PathParam(
+        description="URL-encoded project path"
+    ),
+    session_id: str = PathParam(
+        description="Session UUID or agent ID"
+    ),
+    message_id: str = PathParam(
+        description="Message UUID to retrieve"
+    )
+) -> Message:
+    """Get a specific message by UUID.
+
+    Args:
+        encoded_path: URL-encoded project path
+        session_id: Session UUID or agent ID
+        message_id: Unique message identifier (uuid field)
+
+    Returns:
+        Message object with uuid, type, timestamp, content, model, cwd, gitBranch
+
+    Raises:
+        404: Message not found
+    """
     decoded_encoded_path = unquote(encoded_path)
     messages = await get_session_messages_raw(decoded_encoded_path, session_id)
 
@@ -554,11 +734,31 @@ activity_router = APIRouter(prefix="/projects/{encoded_path}/activity", tags=["a
 
 @activity_router.get("/", response_model=ActivityResponse)
 async def get_activity(
-    encoded_path: str,
-    days: int = Query(14, le=90),
-    type: Literal["regular", "agent", "all"] = Query("regular"),
-):
-    """Get activity timeline for a project."""
+    encoded_path: str = PathParam(
+        description="URL-encoded project path"
+    ),
+    days: int = Query(
+        14,
+        le=90,
+        description="Number of days to look back (max 90, default 14)"
+    ),
+    type: Literal["regular", "agent", "all"] = Query(
+        "regular",
+        description="Filter by session type: 'regular' (default), 'agent', or 'all'"
+    ),
+) -> ActivityResponse:
+    """Get activity timeline for a project.
+
+    Aggregates sessions by date for the specified time period.
+    Useful for building activity charts and calendars.
+
+    Returns daily activity including session count, total messages,
+    and session details for each day.
+
+    Returns:
+        data: List of DailyProjectActivity sorted by date descending
+        summary: ActivitySummaryStats with totals and maxDailyMessages
+    """
     decoded_encoded_path = unquote(encoded_path)
     config = await get_claude_config()
     path_lookup = build_path_lookup(config)

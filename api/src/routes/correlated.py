@@ -1,10 +1,16 @@
-"""Correlated data routes for Claude Explorer API."""
+"""Correlated data routes for Claude Explorer API.
+
+Provides access to data correlated by Session UUID across directories.
+The session UUID is the universal key linking: transcripts, file backups,
+todos, environment variables, and debug logs.
+"""
 
 import json
 from pathlib import Path
 from urllib.parse import unquote
 
 from fastapi import APIRouter, HTTPException
+from fastapi import Path as PathParam
 
 from ..models import (
     CorrelatedData,
@@ -262,8 +268,25 @@ async def find_sub_agent_sessions(session_id: str) -> dict:
 
 
 @router.get("/{session_id}/correlated")
-async def get_correlated(session_id: str):
-    """Get all correlated data for a session."""
+async def get_correlated(
+    session_id: str = PathParam(
+        description="Session UUID (e.g., '31f3f224-f440-41ac-9244-b27ff054116d') that links data across directories"
+    )
+) -> CorrelatedData:
+    """Get all data correlated by session UUID.
+
+    The session UUID is the universal key that links data across
+    directories:
+
+    - todos: Task lists for this session
+    - fileHistory: File backups created during this session
+    - debugLogs: Debug output for this session
+    - linkedPlan: Plan document filename if it mentions this session ID
+    - linkedSkill: Skill name if used during session (reserved for future)
+
+    Returns:
+        CorrelatedData with all linked data for this session
+    """
     todos = await find_session_todos(session_id)
     file_history = await find_session_file_history(session_id)
     debug_logs = await find_session_debug_logs(session_id)
@@ -280,22 +303,74 @@ async def get_correlated(session_id: str):
 
 
 @router.get("/{session_id}/todos")
-async def get_todos(session_id: str):
-    """Get todos for a session."""
+async def get_todos(
+    session_id: str = PathParam(
+        description="Session UUID to retrieve todos for"
+    )
+) -> dict[str, list[TodoItem]]:
+    """Get todos for a session.
+
+    Returns task items for the session. The agentId may equal sessionId
+    (main session) or differ (sub-agent).
+
+    Todo items have:
+    - content: Task description text
+    - status: 'pending', 'in_progress', or 'completed'
+
+    Returns:
+        data: List of TodoItem objects
+    """
     todos = await find_session_todos(session_id)
     return {"data": todos}
 
 
 @router.get("/{session_id}/file-history")
-async def get_file_history(session_id: str):
-    """Get file history for a session."""
+async def get_file_history(
+    session_id: str = PathParam(
+        description="Session UUID to retrieve file history for"
+    )
+) -> dict[str, list[FileHistoryEntry]]:
+    """Get file history for a session.
+
+    Returns file backups from two sources:
+    1. file-history-snapshot messages in the session transcript
+    2. Backup files in the session's file history directory
+
+    Backup files use format {contentHash}@v{version} where:
+    - contentHash: Hash of file content at backup time
+    - version: Sequential version number within the session
+
+    Returns:
+        data: List of FileHistoryEntry objects sorted by filePath and version
+    """
     file_history = await find_session_file_history(session_id)
     return {"data": file_history}
 
 
 @router.get("/{session_id}/file-history/{backup_file_name}")
-async def get_file_backup(session_id: str, backup_file_name: str):
-    """Get content of a backup file."""
+async def get_file_backup(
+    session_id: str = PathParam(
+        description="Session UUID the backup belongs to"
+    ),
+    backup_file_name: str = PathParam(
+        description="Backup filename in format {hash}@v{version} (e.g., '59e0b9c43163e850@v1')"
+    )
+) -> FileBackupContent:
+    """Get content of a specific file backup.
+
+    Retrieves the raw file content from the session's file history.
+
+    Args:
+        session_id: Session UUID
+        backup_file_name: Backup filename (URL-encoded if necessary)
+
+    Returns:
+        FileBackupContent with backupFileName, content, and size in bytes
+
+    Raises:
+        400: Invalid backup file path (path traversal attempt)
+        404: Backup file not found
+    """
     backup_file_name = unquote(backup_file_name)
     claude_dir = get_claude_dir()
     backup_path = claude_dir / "file-history" / session_id / backup_file_name
@@ -318,15 +393,40 @@ async def get_file_backup(session_id: str, backup_file_name: str):
 
 
 @router.get("/{session_id}/sub-agents")
-async def get_sub_agents(session_id: str):
-    """Get sub-agent sessions."""
+async def get_sub_agents(
+    session_id: str = PathParam(
+        description="Session UUID to find sub-agents for"
+    )
+) -> SubAgentResponse:
+    """Get sub-agent sessions spawned by Task tool.
+
+    Sub-agents are identified by 'agent-{shortId}.jsonl' filename pattern
+    in the same project directory as the parent session.
+
+    For main sessions: Returns list of sub-agent sessions in subAgents
+    For sub-agent sessions: Returns the parent session ID in parentSessionId
+
+    Returns:
+        SubAgentResponse with parentSessionId and/or subAgents list
+    """
     result = await find_sub_agent_sessions(session_id)
     return result
 
 
 @router.get("/{session_id}/environment")
-async def get_environment(session_id: str):
-    """Get session environment variables."""
+async def get_environment(
+    session_id: str = PathParam(
+        description="Session UUID to retrieve environment variables for"
+    )
+) -> dict[str, dict[str, str]]:
+    """Get session environment variables.
+
+    Returns environment variables captured for this session.
+    Each file in the session's environment directory contains KEY=value pairs.
+
+    Returns:
+        data: Dictionary of environment variable name to value
+    """
     claude_dir = get_claude_dir()
     env_dir = claude_dir / "session-env" / session_id
     env = {}
@@ -346,7 +446,20 @@ async def get_environment(session_id: str):
 
 
 @router.get("/{session_id}/debug-logs")
-async def get_debug_logs(session_id: str):
-    """Get debug logs for a session."""
+async def get_debug_logs(
+    session_id: str = PathParam(
+        description="Session UUID to retrieve debug logs for"
+    )
+) -> dict[str, list[str]]:
+    """Get debug logs for a session.
+
+    Returns debug log content for this session and any files containing
+    the session ID in their name.
+
+    Logs are truncated to 5KB each, with a maximum of 5 log files returned.
+
+    Returns:
+        data: List of debug log content strings
+    """
     debug_logs = await find_session_debug_logs(session_id)
     return {"data": debug_logs}

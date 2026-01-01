@@ -1,4 +1,9 @@
-"""Config routes for Claude Explorer API."""
+"""Config routes for Claude Explorer API.
+
+Provides read-only access to Claude Code configuration:
+- Main config: User preferences, OAuth, MCP servers, project settings
+- User settings: Permissions, hooks, model selection
+"""
 
 import json
 from typing import Any
@@ -41,8 +46,21 @@ def redact_sensitive_data(obj: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/", response_model=ClaudeConfig)
-async def get_config():
-    """Get Claude configuration (sensitive data redacted)."""
+async def get_config() -> ClaudeConfig:
+    """Get Claude configuration with sensitive data redacted.
+
+    OAuth tokens, API keys, and other sensitive fields are replaced
+    with '[REDACTED]'.
+
+    Includes:
+    - User preferences (theme, notifications)
+    - MCP server configurations
+    - Per-project settings (allowedTools, lastSessionId, costs)
+    - Feature flags (with sensitive values redacted)
+
+    Returns:
+        ClaudeConfig object (dynamic fields allowed)
+    """
     try:
         config_path = get_claude_config_path()
         content = config_path.read_text()
@@ -53,8 +71,20 @@ async def get_config():
 
 
 @router.get("/settings", response_model=ClaudeSettings)
-async def get_settings():
-    """Get user settings."""
+async def get_settings() -> ClaudeSettings:
+    """Get user settings.
+
+    Settings control:
+    - permissions: Tool allow/deny rules
+    - model: Default Claude model selection
+    - hooks: UserPromptSubmit, PreToolUse, PostToolUse, Stop handlers
+    - statusLine: Custom status line configuration
+    - enabledPlugins: Per-plugin enable/disable
+    - alwaysThinkingEnabled: Extended thinking default
+
+    Returns:
+        ClaudeSettings object (dynamic fields allowed)
+    """
     try:
         claude_dir = get_claude_dir()
         settings_path = claude_dir / "settings.json"

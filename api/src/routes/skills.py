@@ -1,9 +1,15 @@
-"""Skills routes for Claude Explorer API."""
+"""Skills routes for Claude Explorer API.
+
+Skills are complex slash commands stored as directories containing
+a SKILL.md file with YAML frontmatter defining name, description,
+and allowed-tools. Invoked with /skill-name.
+"""
 
 from pathlib import Path
 from urllib.parse import unquote
 
 from fastapi import APIRouter, HTTPException
+from fastapi import Path as PathParam
 
 from ..models import Skill
 from ..utils import get_claude_dir, parse_yaml_frontmatter
@@ -44,7 +50,17 @@ async def get_skill_info(skill_path: Path, name: str) -> dict:
 
 @router.get("/")
 async def list_skills() -> dict[str, list[Skill]]:
-    """List all skills."""
+    """List all skills.
+
+    Returns skills from ~/.claude/skills/. Each skill is a directory
+    containing SKILL.md with YAML frontmatter (name, description, allowed-tools).
+    Skills may be symlinks to external directories.
+
+    Skills are invoked in Claude Code with /skill-name.
+
+    Returns:
+        data: List of Skill objects (content excluded for brevity)
+    """
     claude_dir = get_claude_dir()
     skills_dir = claude_dir / "skills"
 
@@ -63,8 +79,29 @@ async def list_skills() -> dict[str, list[Skill]]:
 
 
 @router.get("/{name}", response_model=Skill)
-async def get_skill(name: str):
-    """Get skill details."""
+async def get_skill(
+    name: str = PathParam(
+        description="Skill directory name (e.g., 'dev-journal', 'frontend-design')"
+    )
+) -> Skill:
+    """Get a specific skill with full content.
+
+    Returns skill details including the full SKILL.md content and
+    parsed YAML frontmatter (name, description, allowed-tools).
+
+    If the skill is a symlink, includes isSymlink=true and realPath
+    pointing to the resolved absolute path.
+
+    Args:
+        name: Skill directory name
+
+    Returns:
+        Skill object with name, description, allowedTools, content, and symlink info
+
+    Raises:
+        400: Invalid skill name (path traversal attempt)
+        404: Skill not found
+    """
     name = unquote(name)
     claude_dir = get_claude_dir()
     skill_path = claude_dir / "skills" / name

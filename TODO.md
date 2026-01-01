@@ -53,10 +53,10 @@ This is the authoritative source for project paths. The encoded directory names 
 
 ### What was done
 
-1. **Fixed encoding function** (`api-py/src/utils.py`):
+1. **Fixed encoding function** (`api/src/utils.py`):
    - Changed from ad-hoc replacement to regex matching Claude Code's scheme
 
-2. **Added config lookup** (`api-py/src/routes/projects.py`):
+2. **Added config lookup** (`api/src/routes/projects.py`):
    - Build reverse lookup: `encoded_name → real_path` from config
    - Projects with session directories get their real path from config
    - Fallback decode for orphan directories (directories not in config)
@@ -72,7 +72,7 @@ This is the authoritative source for project paths. The encoded directory names 
    - Added `export const dynamic = 'force-dynamic'` to page.tsx
    - Fixed null handling in formatCost/formatTokens
 
-5. **Orphan directory path resolution** (`api-py/src/utils.py`, `api-py/src/routes/projects.py`):
+5. **Orphan directory path resolution** (`api/src/utils.py`, `api/src/routes/projects.py`):
    - Added `extract_cwd_from_project_dir()` to extract real paths from agent file `cwd` field
    - Orphan directories (no config entry) now use cwd heuristic before fallback decode
    - Added `isOrphan: bool` field to Project model
@@ -95,7 +95,7 @@ The UI now shows:
 
 **What was implemented**:
 
-1. **API: `pathPrefix` query parameter** (`api-py/src/routes/projects.py`):
+1. **API: `pathPrefix` query parameter** (`api/src/routes/projects.py`):
    - `GET /api/v1/projects/?pathPrefix=~/Projects` filters to matching paths
    - Supports multiple prefixes via repeated params: `?pathPrefix=~/Projects&pathPrefix=~/Work`
    - Expands `~` to home directory server-side
@@ -107,7 +107,7 @@ The UI now shows:
 
 3. **Next.js API route** (`app/api/settings/route.ts`):
    - GET/PUT for reading/writing `.config/app.json`
-   - Client-side persistence (no changes to api-py)
+   - Client-side persistence (no changes to api)
 
 4. **Home page integration** (`app/page.tsx`):
    - Reads settings server-side
@@ -144,9 +144,9 @@ The TypeScript API client (`lib/api-client.ts`) was updated with `hasSessionData
 
 | File | Purpose |
 |------|---------|
-| `api-py/src/utils.py` | Path encoding/decoding, cwd extraction, path normalization |
-| `api-py/src/routes/projects.py` | Project listing with config lookup, orphan handling, path filtering |
-| `api-py/src/models.py` | Pydantic models (hasSessionData, isOrphan fields) |
+| `api/src/utils.py` | Path encoding/decoding, cwd extraction, path normalization |
+| `api/src/routes/projects.py` | Project listing with config lookup, orphan handling, path filtering |
+| `api/src/models.py` | Pydantic models (hasSessionData, isOrphan fields) |
 | `lib/api-client.ts` | TypeScript API client types and functions |
 | `app/page.tsx` | Homepage with project list, filtering, and orphan indicators |
 | `app/api/settings/route.ts` | Next.js API route for app settings |
