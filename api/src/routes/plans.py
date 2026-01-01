@@ -18,7 +18,7 @@ router = APIRouter(prefix="/plans", tags=["plans"])
 async def list_plans() -> dict[str, list[str]]:
     """List all plan documents.
 
-    Returns filenames of all markdown files in ~/.claude/plans/.
+    Returns filenames of all plan markdown files
     Plan names are auto-generated whimsical names (e.g., cosmic-plotting-bunny.md).
 
     Returns:

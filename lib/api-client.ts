@@ -18,7 +18,7 @@ interface PaginatedResponse<T> {
 // Project types
 export interface Project {
   path: string;
-  encodedPath: string;
+  projectId: string;
   displayPath: string;
   name: string;
   sessionCount: number;
@@ -246,20 +246,20 @@ export async function getProjects(options?: {
   return fetchApi(`/projects${query ? `?${query}` : ''}`);
 }
 
-export async function getProject(encodedPath: string): Promise<ProjectDetail> {
-  return fetchApi(`/projects/${encodeURIComponent(encodedPath)}`);
+export async function getProject(projectId: string): Promise<ProjectDetail> {
+  return fetchApi(`/projects/${encodeURIComponent(projectId)}`);
 }
 
-export async function getProjectConfig(encodedPath: string): Promise<{
+export async function getProjectConfig(projectId: string): Promise<{
   path: string;
   config: Record<string, unknown>;
 }> {
-  return fetchApi(`/projects/${encodeURIComponent(encodedPath)}/config`);
+  return fetchApi(`/projects/${encodeURIComponent(projectId)}/config`);
 }
 
 // Sessions API
 export async function getProjectSessions(
-  encodedPath: string,
+  projectId: string,
   options?: {
     type?: 'regular' | 'agent' | 'all';
     sortBy?: string;
@@ -276,19 +276,19 @@ export async function getProjectSessions(
   if (options?.offset) params.set('offset', String(options.offset));
 
   const query = params.toString();
-  return fetchApi(`/projects/${encodeURIComponent(encodedPath)}/sessions${query ? `?${query}` : ''}`);
+  return fetchApi(`/projects/${encodeURIComponent(projectId)}/sessions${query ? `?${query}` : ''}`);
 }
 
 export async function getSession(
-  encodedPath: string,
+  projectId: string,
   sessionId: string
 ): Promise<SessionDetail> {
-  return fetchApi(`/projects/${encodeURIComponent(encodedPath)}/sessions/${sessionId}`);
+  return fetchApi(`/projects/${encodeURIComponent(projectId)}/sessions/${sessionId}`);
 }
 
 // Messages API
 export async function getSessionMessages(
-  encodedPath: string,
+  projectId: string,
   sessionId: string,
   options?: {
     type?: 'user' | 'assistant' | 'all';
@@ -303,23 +303,23 @@ export async function getSessionMessages(
 
   const query = params.toString();
   return fetchApi(
-    `/projects/${encodeURIComponent(encodedPath)}/sessions/${sessionId}/messages${query ? `?${query}` : ''}`
+    `/projects/${encodeURIComponent(projectId)}/sessions/${sessionId}/messages${query ? `?${query}` : ''}`
   );
 }
 
 export async function getMessage(
-  encodedPath: string,
+  projectId: string,
   sessionId: string,
   messageId: string
 ): Promise<Message> {
   return fetchApi(
-    `/projects/${encodeURIComponent(encodedPath)}/sessions/${sessionId}/messages/${messageId}`
+    `/projects/${encodeURIComponent(projectId)}/sessions/${sessionId}/messages/${messageId}`
   );
 }
 
 // Activity API
 export async function getProjectActivity(
-  encodedPath: string,
+  projectId: string,
   options?: {
     days?: number;
     type?: 'regular' | 'agent' | 'all';
@@ -330,30 +330,25 @@ export async function getProjectActivity(
   if (options?.type) params.set('type', options.type);
 
   const query = params.toString();
-  return fetchApi(`/projects/${encodeURIComponent(encodedPath)}/activity${query ? `?${query}` : ''}`);
-}
-
-// Correlated Data API
-export async function getCorrelatedData(sessionId: string): Promise<CorrelatedData> {
-  return fetchApi(`/sessions/${sessionId}/correlated`);
+  return fetchApi(`/projects/${encodeURIComponent(projectId)}/activity${query ? `?${query}` : ''}`);
 }
 
 export async function getSessionSubAgents(
-  encodedPath: string,
+  projectId: string,
   sessionId: string
 ): Promise<SubAgentResponse> {
   return fetchApi(
-    `/projects/${encodeURIComponent(encodedPath)}/sessions/${sessionId}/sub-agents/`
+    `/projects/${encodeURIComponent(projectId)}/sessions/${sessionId}/sub-agents/`
   );
 }
 
 export async function getSubAgent(
-  encodedPath: string,
+  projectId: string,
   sessionId: string,
   agentId: string
 ): Promise<SessionDetail> {
   return fetchApi(
-    `/projects/${encodeURIComponent(encodedPath)}/sessions/${sessionId}/sub-agents/${agentId}`
+    `/projects/${encodeURIComponent(projectId)}/sessions/${sessionId}/sub-agents/${agentId}`
   );
 }
 

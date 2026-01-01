@@ -7,7 +7,7 @@ prompts across projects without full conversation context.
 from fastapi import APIRouter, Query
 
 from ..models import HistoryResponse
-from ..utils import get_claude_dir, parse_jsonl_file
+from ..utils import encode_project_path, get_claude_dir, parse_jsonl_file
 
 router = APIRouter(prefix="/history", tags=["history"])
 
@@ -94,8 +94,20 @@ async def get_history(
         total = len(entries)
         paginated = entries[offset : offset + limit]
 
+        # Transform entries to use projectPath and projectId
+        transformed = []
+        for entry in paginated:
+            project = entry.get("project")
+            transformed.append({
+                "display": entry.get("display", ""),
+                "timestamp": entry.get("timestamp", 0),
+                "projectPath": project,
+                "projectId": encode_project_path(project) if project else None,
+                "pastedContents": entry.get("pastedContents"),
+            })
+
         return {
-            "data": paginated,
+            "data": transformed,
             "meta": {
                 "total": total,
                 "limit": limit,

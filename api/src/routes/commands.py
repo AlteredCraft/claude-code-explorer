@@ -34,7 +34,7 @@ async def get_command_info(file_path, name: str) -> dict:
 async def list_commands() -> dict[str, list[Command]]:
     """List all custom slash commands.
 
-    Returns commands from ~/.claude/commands/. Each command is a markdown
+    Returns all known commands. Each command is a markdown
     file with optional YAML frontmatter defining name and description.
     Commands are invoked in Claude Code with /command-name.
 

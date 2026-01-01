@@ -12,8 +12,8 @@ import {
 } from '@/components/ui/dialog';
 import { getProjectConfig } from '@/lib/api-client';
 
-export function ProjectConfigModal({ encodedPath, projectName }: {
-  encodedPath: string;
+export function ProjectConfigModal({ projectId, projectName }: {
+  projectId: string;
   projectName: string;
 }) {
   const [config, setConfig] = useState<Record<string, unknown> | null>(null);
@@ -26,7 +26,7 @@ export function ProjectConfigModal({ encodedPath, projectName }: {
     if (isOpen && !config) {
       setLoading(true);
       try {
-        const data = await getProjectConfig(encodedPath);
+        const data = await getProjectConfig(projectId);
         setConfig(data.config);
         setConfigPath(data.path);
       } catch {

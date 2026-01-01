@@ -2,7 +2,7 @@
 
 export interface Project {
   path: string;
-  encodedPath: string;
+  projectId: string;
   lastSessionId?: string;
   lastCost?: number;
   lastDuration?: number;

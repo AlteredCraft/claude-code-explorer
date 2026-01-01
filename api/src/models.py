@@ -36,9 +36,9 @@ class Project(BaseModel):
     session transcripts.
     """
     path: str = Field(description="Absolute filesystem path to the project directory")
-    encoded_path: str = Field(
-        alias="encodedPath",
-        description="URL-safe encoded path for API routing. Non-alphanumeric characters replaced with '-'"
+    id: str = Field(
+        alias="projectId",
+        description="Project identifier for API routing (e.g., '-Users-sam-Projects-foo')"
     )
     display_path: str = Field(
         alias="displayPath",
@@ -456,7 +456,7 @@ class Skill(BaseModel):
     Skills contain a SKILL.md file with YAML frontmatter defining
     name, description, and allowed-tools.
     """
-    name: str = Field(description="Skill directory name (invoked with /skill-name)")
+    name: str = Field(description="Skill name (invoked with /skill-name)")
     description: str | None = Field(
         None,
         description="Description from SKILL.md YAML frontmatter"
@@ -668,9 +668,15 @@ class HistoryEntry(BaseModel):
     """
     display: str = Field(description="User's prompt text as displayed")
     timestamp: int = Field(description="Unix timestamp in milliseconds")
-    project: str | None = Field(
+    project_path: str | None = Field(
         None,
+        alias="projectPath",
         description="Absolute path to project where prompt was entered"
+    )
+    project_id: str | None = Field(
+        None,
+        alias="projectId",
+        description="Encoded project path for URL routing (e.g., '-Users-sam-Projects-foo')"
     )
     pasted_contents: dict[str, Any] | None = Field(
         None,

@@ -38,12 +38,12 @@ interface PageProps {
 
 export default async function ProjectPage({ params }: PageProps) {
   const { id } = await params;
-  const encodedPath = decodeFromUrl(id);
-  const decodedPath = decodeProjectPath(encodedPath);
+  const projectId = decodeFromUrl(id);
+  const decodedPath = decodeProjectPath(projectId);
   const projectName = getProjectName(decodedPath);
   const displayPath = getDisplayPath(decodedPath);
 
-  const response = await getProjectSessions(encodedPath);
+  const response = await getProjectSessions(projectId);
   const sessions = response.data;
 
   // Separate regular sessions from agent sessions
@@ -72,7 +72,7 @@ export default async function ProjectPage({ params }: PageProps) {
       <div>
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{projectName}</h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 font-mono">{displayPath}</p>
-        <SourcePath path={`~/.claude/projects/${encodedPath}/`} className="mt-1" />
+        <SourcePath path={`~/.claude/projects/${projectId}/`} className="mt-1" />
       </div>
 
       {/* Summary */}

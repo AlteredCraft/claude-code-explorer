@@ -40,7 +40,7 @@ def normalize_path(path: str) -> str:
     # Remove trailing slash
     path = path.rstrip("/")
 
-    # Normalize parameter names: {encoded_path} -> {encodedPath}
+    # Normalize parameter names: {project_id} -> {projectId}
     def to_camel(match):
         parts = match.group(1).split("_")
         return "{" + parts[0] + "".join(p.capitalize() for p in parts[1:]) + "}"

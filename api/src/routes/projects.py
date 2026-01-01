@@ -222,7 +222,7 @@ async def list_projects(
 
         projects.append({
             "path": decoded_path,
-            "encodedPath": entry.name,
+            "projectId": entry.name,
             "displayPath": get_display_path(decoded_path),
             "name": get_project_name(decoded_path),
             "sessionCount": len(session_files),
@@ -249,7 +249,7 @@ async def list_projects(
         # Config-only project - no session data
         projects.append({
             "path": real_path,
-            "encodedPath": encoded,
+            "projectId": encoded,
             "displayPath": get_display_path(real_path),
             "name": get_project_name(real_path),
             "sessionCount": 0,
@@ -298,10 +298,10 @@ async def list_projects(
     }
 
 
-@router.get("/{encoded_path}", response_model=ProjectDetail)
+@router.get("/{project_id}", response_model=ProjectDetail)
 async def get_project(
-    encoded_path: str = PathParam(
-        description="URL-encoded project path (e.g., '-Users-sam-Projects-my-app')"
+    project_id: str = PathParam(
+        description="Project identifier (e.g., '-Users-sam-Projects-my-app')"
     )
 ) -> ProjectDetail:
     """Get detailed project information.
@@ -310,7 +310,7 @@ async def get_project(
     The encoded path is the directory name format used for session storage.
 
     Args:
-        encoded_path: URL-encoded project path from list_projects
+        project_id: Project identifier from list_projects
 
     Returns:
         ProjectDetail with recentSessions (up to 10) and activitySummary
@@ -318,19 +318,19 @@ async def get_project(
     Raises:
         404: Project directory not found
     """
-    decoded_encoded_path = unquote(encoded_path)
+    project_id_unquoted = unquote(project_id)
     claude_dir = get_claude_dir()
-    project_dir = claude_dir / "projects" / decoded_encoded_path
+    project_dir = claude_dir / "projects" / project_id_unquoted
 
     if not project_dir.exists():
-        raise HTTPException(status_code=404, detail=f"Project not found: {decoded_encoded_path}")
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id_unquoted}")
 
     config = await get_claude_config()
     path_lookup = build_path_lookup(config)
-    decoded_path = path_lookup.get(decoded_encoded_path) or decode_project_path(decoded_encoded_path)
+    decoded_path = path_lookup.get(project_id_unquoted) or decode_project_path(project_id_unquoted)
     config_projects = config.get("projects", {})
     project_config = config_projects.get(decoded_path, {})
-    session_files = await get_session_files(decoded_encoded_path)
+    session_files = await get_session_files(project_id_unquoted)
 
     last_activity = None
     if session_files:
@@ -340,7 +340,7 @@ async def get_project(
     recent_sessions = []
     for file in session_files[:10]:
         session_id = file["name"].replace(".jsonl", "")
-        bounds = await get_session_bounds(decoded_encoded_path, file["name"])
+        bounds = await get_session_bounds(project_id_unquoted, file["name"])
 
         recent_sessions.append({
             "id": session_id,
@@ -359,14 +359,14 @@ async def get_project(
         session_id = file["name"].replace(".jsonl", "")
         if session_id.startswith("agent-"):
             total_agent_sessions += 1
-        bounds = await get_session_bounds(decoded_encoded_path, file["name"])
+        bounds = await get_session_bounds(project_id_unquoted, file["name"])
         total_messages += bounds["message_count"]
 
     first_session = session_files[-1]["mtime"].isoformat() if session_files else None
 
     return {
         "path": decoded_path,
-        "encodedPath": decoded_encoded_path,
+        "projectId": project_id_unquoted,
         "displayPath": get_display_path(decoded_path),
         "name": get_project_name(decoded_path),
         "sessionCount": len(session_files),
@@ -385,10 +385,10 @@ async def get_project(
     }
 
 
-@router.get("/{encoded_path}/config")
+@router.get("/{project_id}/config")
 async def get_project_config(
-    encoded_path: str = PathParam(
-        description="URL-encoded project path"
+    project_id: str = PathParam(
+        description="Project identifier"
     )
 ) -> dict:
     """Get raw project config.
@@ -397,7 +397,7 @@ async def get_project_config(
     allowedTools, lastSessionId, costs, and MCP server settings.
 
     Args:
-        encoded_path: URL-encoded project path
+        project_id: Project identifier
 
     Returns:
         Object with 'path' (decoded) and 'config' (raw config entry)
@@ -405,11 +405,11 @@ async def get_project_config(
     Raises:
         404: Project not found in config (orphan project)
     """
-    decoded_encoded_path = unquote(encoded_path)
+    project_id_unquoted = unquote(project_id)
     config = await get_claude_config()
     path_lookup = build_path_lookup(config)
 
-    decoded_path = path_lookup.get(decoded_encoded_path)
+    decoded_path = path_lookup.get(project_id_unquoted)
     if not decoded_path:
         raise HTTPException(status_code=404, detail="Project not in config (orphan)")
 
@@ -420,13 +420,13 @@ async def get_project_config(
 
 
 # Sessions routes are nested under projects
-sessions_router = APIRouter(prefix="/projects/{encoded_path}/sessions", tags=["sessions"])
+sessions_router = APIRouter(prefix="/projects/{project_id}/sessions", tags=["sessions"])
 
 
 @sessions_router.get("/", response_model=PaginatedResponse[Session])
 async def list_sessions(
-    encoded_path: str = PathParam(
-        description="URL-encoded project path"
+    project_id: str = PathParam(
+        description="Project identifier"
     ),
     type: Literal["regular", "agent", "all"] = Query(
         "all",
@@ -465,16 +465,16 @@ async def list_sessions(
         data: List of Session objects with id, timestamps, message count
         meta: Pagination metadata
     """
-    decoded_encoded_path = unquote(encoded_path)
+    project_id_unquoted = unquote(project_id)
     config = await get_claude_config()
     path_lookup = build_path_lookup(config)
-    decoded_path = path_lookup.get(decoded_encoded_path) or decode_project_path(decoded_encoded_path)
-    session_files = await get_session_files(decoded_encoded_path)
+    decoded_path = path_lookup.get(project_id_unquoted) or decode_project_path(project_id_unquoted)
+    session_files = await get_session_files(project_id_unquoted)
 
     sessions = []
     for file in session_files:
         session_id = file["name"].replace(".jsonl", "")
-        bounds = await get_session_bounds(decoded_encoded_path, file["name"])
+        bounds = await get_session_bounds(project_id_unquoted, file["name"])
 
         sessions.append({
             "id": session_id,
@@ -509,8 +509,8 @@ async def list_sessions(
 
 @sessions_router.get("/{session_id}", response_model=SessionDetail)
 async def get_session(
-    encoded_path: str = PathParam(
-        description="URL-encoded project path"
+    project_id: str = PathParam(
+        description="Project identifier"
     ),
     session_id: str = PathParam(
         description="Session UUID (e.g., '31f3f224-f440-41ac-9244-b27ff054116d') or agent ID (e.g., 'agent-a980ab1')"
@@ -525,7 +525,7 @@ async def get_session(
     data across directories.
 
     Args:
-        encoded_path: URL-encoded project path
+        project_id: Project identifier
         session_id: Session UUID or agent-{shortId}
 
     Returns:
@@ -534,20 +534,20 @@ async def get_session(
     Raises:
         404: Session not found
     """
-    decoded_encoded_path = unquote(encoded_path)
+    project_id_unquoted = unquote(project_id)
     config = await get_claude_config()
     path_lookup = build_path_lookup(config)
-    decoded_path = path_lookup.get(decoded_encoded_path) or decode_project_path(decoded_encoded_path)
+    decoded_path = path_lookup.get(project_id_unquoted) or decode_project_path(project_id_unquoted)
 
     claude_dir = get_claude_dir()
     filename = session_id if session_id.endswith(".jsonl") else f"{session_id}.jsonl"
-    file_path = claude_dir / "projects" / decoded_encoded_path / filename
+    file_path = claude_dir / "projects" / project_id_unquoted / filename
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
 
-    bounds = await get_session_bounds(decoded_encoded_path, filename)
-    metadata = await get_session_metadata(decoded_encoded_path, session_id)
+    bounds = await get_session_bounds(project_id_unquoted, filename)
+    metadata = await get_session_metadata(project_id_unquoted, session_id)
     correlated = await get_correlated_data(session_id)
 
     duration = None
@@ -627,15 +627,15 @@ async def get_correlated_data(session_id: str) -> dict:
 
 # Messages routes
 messages_router = APIRouter(
-    prefix="/projects/{encoded_path}/sessions/{session_id}/messages",
+    prefix="/projects/{project_id}/sessions/{session_id}/messages",
     tags=["messages"],
 )
 
 
 @messages_router.get("/", response_model=PaginatedResponse[Message])
 async def list_messages(
-    encoded_path: str = PathParam(
-        description="URL-encoded project path"
+    project_id: str = PathParam(
+        description="Project identifier"
     ),
     session_id: str = PathParam(
         description="Session UUID or agent ID"
@@ -670,8 +670,8 @@ async def list_messages(
         data: List of Message objects
         meta: Pagination metadata
     """
-    decoded_encoded_path = unquote(encoded_path)
-    messages = await get_session_messages_raw(decoded_encoded_path, session_id)
+    project_id_unquoted = unquote(project_id)
+    messages = await get_session_messages_raw(project_id_unquoted, session_id)
 
     # Filter by type
     if type == "user":
@@ -696,8 +696,8 @@ async def list_messages(
 
 @messages_router.get("/{message_id}")
 async def get_message(
-    encoded_path: str = PathParam(
-        description="URL-encoded project path"
+    project_id: str = PathParam(
+        description="Project identifier"
     ),
     session_id: str = PathParam(
         description="Session UUID or agent ID"
@@ -709,7 +709,7 @@ async def get_message(
     """Get a specific message by UUID.
 
     Args:
-        encoded_path: URL-encoded project path
+        project_id: Project identifier
         session_id: Session UUID or agent ID
         message_id: Unique message identifier (uuid field)
 
@@ -719,8 +719,8 @@ async def get_message(
     Raises:
         404: Message not found
     """
-    decoded_encoded_path = unquote(encoded_path)
-    messages = await get_session_messages_raw(decoded_encoded_path, session_id)
+    project_id_unquoted = unquote(project_id)
+    messages = await get_session_messages_raw(project_id_unquoted, session_id)
 
     for msg in messages:
         if msg["uuid"] == message_id:
@@ -731,15 +731,15 @@ async def get_message(
 
 # Sub-agent routes nested under sessions
 sub_agents_router = APIRouter(
-    prefix="/projects/{encoded_path}/sessions/{session_id}/sub-agents",
+    prefix="/projects/{project_id}/sessions/{session_id}/sub-agents",
     tags=["sub-agents"],
 )
 
 
 @sub_agents_router.get("/", response_model=SubAgentResponse)
 async def list_sub_agents(
-    encoded_path: str = PathParam(
-        description="URL-encoded project path"
+    project_id: str = PathParam(
+        description="Project identifier"
     ),
     session_id: str = PathParam(
         description="Parent session UUID to find sub-agents for"
@@ -757,12 +757,12 @@ async def list_sub_agents(
     """
     from .correlated import find_sub_agent_sessions
 
-    decoded_encoded_path = unquote(encoded_path)
+    project_id_unquoted = unquote(project_id)
     claude_dir = get_claude_dir()
-    project_dir = claude_dir / "projects" / decoded_encoded_path
+    project_dir = claude_dir / "projects" / project_id_unquoted
 
     if not project_dir.exists():
-        raise HTTPException(status_code=404, detail=f"Project not found: {decoded_encoded_path}")
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id_unquoted}")
 
     filename = f"{session_id}.jsonl"
     if not (project_dir / filename).exists():
@@ -774,8 +774,8 @@ async def list_sub_agents(
 
 @sub_agents_router.get("/{agent_id}", response_model=SessionDetail)
 async def get_sub_agent(
-    encoded_path: str = PathParam(
-        description="URL-encoded project path"
+    project_id: str = PathParam(
+        description="Project identifier"
     ),
     session_id: str = PathParam(
         description="Parent session UUID"
@@ -790,7 +790,7 @@ async def get_sub_agent(
     and correlated data.
 
     Args:
-        encoded_path: URL-encoded project path
+        project_id: Project identifier
         session_id: Parent session UUID
         agent_id: Sub-agent ID (with or without 'agent-' prefix)
 
@@ -802,12 +802,12 @@ async def get_sub_agent(
     """
     from .correlated import find_sub_agent_sessions
 
-    decoded_encoded_path = unquote(encoded_path)
+    project_id_unquoted = unquote(project_id)
     claude_dir = get_claude_dir()
-    project_dir = claude_dir / "projects" / decoded_encoded_path
+    project_dir = claude_dir / "projects" / project_id_unquoted
 
     if not project_dir.exists():
-        raise HTTPException(status_code=404, detail=f"Project not found: {decoded_encoded_path}")
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id_unquoted}")
 
     # Normalize agent_id to include 'agent-' prefix
     normalized_agent_id = agent_id if agent_id.startswith("agent-") else f"agent-{agent_id}"
@@ -828,17 +828,17 @@ async def get_sub_agent(
         )
 
     # Return the sub-agent's session details using the existing get_session logic
-    return await get_session(encoded_path, normalized_agent_id)
+    return await get_session(project_id, normalized_agent_id)
 
 
 # Activity routes
-activity_router = APIRouter(prefix="/projects/{encoded_path}/activity", tags=["activity"])
+activity_router = APIRouter(prefix="/projects/{project_id}/activity", tags=["activity"])
 
 
 @activity_router.get("/", response_model=ActivityResponse)
 async def get_activity(
-    encoded_path: str = PathParam(
-        description="URL-encoded project path"
+    project_id: str = PathParam(
+        description="Project identifier"
     ),
     days: int = Query(
         14,
@@ -862,17 +862,17 @@ async def get_activity(
         data: List of DailyProjectActivity sorted by date descending
         summary: ActivitySummaryStats with totals and maxDailyMessages
     """
-    decoded_encoded_path = unquote(encoded_path)
+    project_id_unquoted = unquote(project_id)
     config = await get_claude_config()
     path_lookup = build_path_lookup(config)
-    decoded_path = path_lookup.get(decoded_encoded_path) or decode_project_path(decoded_encoded_path)
-    session_files = await get_session_files(decoded_encoded_path)
+    decoded_path = path_lookup.get(project_id_unquoted) or decode_project_path(project_id_unquoted)
+    session_files = await get_session_files(project_id_unquoted)
 
     # Get all sessions with their start times
     sessions = []
     for file in session_files:
         session_id = file["name"].replace(".jsonl", "")
-        bounds = await get_session_bounds(decoded_encoded_path, file["name"])
+        bounds = await get_session_bounds(project_id_unquoted, file["name"])
 
         sessions.append({
             "id": session_id,

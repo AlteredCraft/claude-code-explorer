@@ -18,7 +18,7 @@ router = APIRouter(prefix="/shell-snapshots", tags=["shell-snapshots"])
 async def list_shell_snapshots() -> dict[str, list[ShellSnapshot]]:
     """List all shell snapshots.
 
-    Returns shell snapshots from ~/.claude/shell-snapshots/. Each snapshot
+    Returns all shell snapshots. Each snapshot
     filename contains the shell type, timestamp, and a random suffix
     (e.g., snapshot-zsh-1752622750085-qza877.sh).
 

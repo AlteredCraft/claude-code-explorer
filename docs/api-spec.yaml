@@ -16,9 +16,9 @@ info:
     A Session UUID (e.g., `31f3f224-f440-41ac-9244-b27ff054116d`) is the universal identifier
     that links data across multiple directories in `~/.claude/`.
 
-    ### Encoded Project Path
-    Project paths are encoded by replacing `/` with `-` (e.g., `/Users/sam/foo` becomes `-Users-sam-foo`).
-    Use URL encoding when passing encoded paths in URLs.
+    ### Project ID
+    Project IDs are derived from paths by replacing non-alphanumeric characters with `-`
+    (e.g., `/Users/sam/foo` becomes `-Users-sam-foo`). Use URL encoding when passing in URLs.
 
   version: 1.0.0
   contact:
@@ -79,7 +79,7 @@ paths:
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
 
-  /projects/{encodedPath}:
+  /projects/{projectId}:
     get:
       operationId: getProject
       summary: Get project details
@@ -87,7 +87,7 @@ paths:
       tags:
         - Projects
       parameters:
-        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/projectId'
       responses:
         '200':
           description: Project details
@@ -101,7 +101,7 @@ paths:
   # =============================================================================
   # SESSIONS
   # =============================================================================
-  /projects/{encodedPath}/sessions:
+  /projects/{projectId}/sessions:
     get:
       operationId: listProjectSessions
       summary: List sessions for a project
@@ -109,7 +109,7 @@ paths:
       tags:
         - Sessions
       parameters:
-        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/projectId'
         - name: type
           in: query
           description: Filter by session type
@@ -138,7 +138,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /projects/{encodedPath}/sessions/{sessionId}:
+  /projects/{projectId}/sessions/{sessionId}:
     get:
       operationId: getSession
       summary: Get session details
@@ -146,7 +146,7 @@ paths:
       tags:
         - Sessions
       parameters:
-        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/projectId'
         - $ref: '#/components/parameters/sessionId'
       responses:
         '200':
@@ -158,7 +158,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /projects/{encodedPath}/activity:
+  /projects/{projectId}/activity:
     get:
       operationId: getProjectActivity
       summary: Get project activity timeline
@@ -168,7 +168,7 @@ paths:
       tags:
         - Projects
       parameters:
-        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/projectId'
         - name: days
           in: query
           description: Number of days to include (default 14)
@@ -212,7 +212,7 @@ paths:
   # =============================================================================
   # MESSAGES
   # =============================================================================
-  /projects/{encodedPath}/sessions/{sessionId}/messages:
+  /projects/{projectId}/sessions/{sessionId}/messages:
     get:
       operationId: listSessionMessages
       summary: List messages in a session
@@ -220,7 +220,7 @@ paths:
       tags:
         - Messages
       parameters:
-        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/projectId'
         - $ref: '#/components/parameters/sessionId'
         - name: type
           in: query
@@ -248,7 +248,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /projects/{encodedPath}/sessions/{sessionId}/messages/{messageId}:
+  /projects/{projectId}/sessions/{sessionId}/messages/{messageId}:
     get:
       operationId: getMessage
       summary: Get a specific message
@@ -256,7 +256,7 @@ paths:
       tags:
         - Messages
       parameters:
-        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/projectId'
         - $ref: '#/components/parameters/sessionId'
         - name: messageId
           in: path
@@ -278,29 +278,7 @@ paths:
   # =============================================================================
   # CORRELATED DATA
   # =============================================================================
-  /sessions/{sessionId}/correlated:
-    get:
-      operationId: getCorrelatedData
-      summary: Get all correlated data for a session
-      description: |
-        Returns all data correlated by session ID across `~/.claude/` directories:
-        - Todos from `todos/`
-        - File history from `file-history/`
-        - Debug logs from `debug/`
-        - Linked plans from `plans/`
-      tags:
-        - Correlated Data
-      parameters:
-        - $ref: '#/components/parameters/sessionIdPath'
-      responses:
-        '200':
-          description: Correlated data
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CorrelatedData'
-
-  /projects/{encodedPath}/sessions/{sessionId}/sub-agents:
+  /projects/{projectId}/sessions/{sessionId}/sub-agents:
     get:
       operationId: listSessionSubAgents
       summary: List sub-agent sessions
@@ -311,7 +289,7 @@ paths:
       tags:
         - Sessions
       parameters:
-        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/projectId'
         - $ref: '#/components/parameters/sessionId'
       responses:
         '200':
@@ -323,7 +301,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /projects/{encodedPath}/sessions/{sessionId}/sub-agents/{agentId}:
+  /projects/{projectId}/sessions/{sessionId}/sub-agents/{agentId}:
     get:
       operationId: getSubAgent
       summary: Get sub-agent details
@@ -333,7 +311,7 @@ paths:
       tags:
         - Sessions
       parameters:
-        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/projectId'
         - $ref: '#/components/parameters/sessionId'
         - name: agentId
           in: path
@@ -484,7 +462,7 @@ paths:
     get:
       operationId: listShellSnapshots
       summary: List shell snapshots
-      description: Returns list of shell snapshots from `~/.claude/shell-snapshots/`
+      description: Returns list of all shell snapshots
       tags:
         - Correlated Data
       responses:
@@ -600,7 +578,7 @@ paths:
     get:
       operationId: listCommands
       summary: List all commands
-      description: Returns all slash commands from `~/.claude/commands/`
+      description: Returns all known slash commands
       tags:
         - Configuration
       responses:
@@ -720,7 +698,7 @@ paths:
         - name: name
           in: path
           required: true
-          description: Skill directory name
+          description: Skill name
           schema:
             type: string
       responses:
@@ -937,11 +915,11 @@ paths:
 # =============================================================================
 components:
   parameters:
-    encodedPath:
-      name: encodedPath
+    projectId:
+      name: project_id
       in: path
       required: true
-      description: URL-encoded project path (e.g., `-Users-sam-foo`)
+      description: Project identifier (e.g., `-Users-sam-foo`)
       schema:
         type: string
         example: '-Users-sam-Projects-my-app'
@@ -1017,7 +995,7 @@ components:
       type: object
       required:
         - path
-        - encodedPath
+        - projectId
         - name
         - displayPath
         - sessionCount
@@ -1026,9 +1004,9 @@ components:
           type: string
           description: Decoded absolute path
           example: '/Users/sam/Projects/my-app'
-        encodedPath:
+        projectId:
           type: string
-          description: Encoded path format (/ replaced with -)
+          description: Project identifier for API routing
           example: '-Users-sam-Projects-my-app'
         displayPath:
           type: string
@@ -1455,9 +1433,12 @@ components:
         timestamp:
           type: integer
           description: Unix timestamp (milliseconds)
-        project:
+        projectPath:
           type: string
-          description: Project path
+          description: Absolute path to project
+        projectId:
+          type: string
+          description: Project identifier for API routing
         pastedContents:
           type: object
 
@@ -1519,7 +1500,7 @@ components:
       properties:
         name:
           type: string
-          description: Skill directory name
+          description: Skill name
         description:
           type: string
           description: Description from SKILL.md frontmatter

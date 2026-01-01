@@ -301,41 +301,6 @@ async def find_sub_agent_sessions(
     return {"parentSessionId": parent_session_id, "subAgents": sub_agents}
 
 
-@router.get("/{session_id}/correlated")
-async def get_correlated(
-    session_id: str = PathParam(
-        description="Session UUID (e.g., '31f3f224-f440-41ac-9244-b27ff054116d') that links data across directories"
-    )
-) -> CorrelatedData:
-    """Get all data correlated by session UUID.
-
-    The session UUID is the universal key that links data across
-    directories:
-
-    - todos: Task lists for this session
-    - fileHistory: File backups created during this session
-    - debugLogs: Debug output for this session
-    - linkedPlan: Plan document filename if it mentions this session ID
-    - linkedSkill: Skill name if used during session (reserved for future)
-
-    Returns:
-        CorrelatedData with all linked data for this session
-    """
-    todos = await find_session_todos(session_id)
-    file_history = await find_session_file_history(session_id)
-    debug_logs = await find_session_debug_logs(session_id)
-    linked_plan = await find_linked_plan(session_id)
-    linked_skill = await find_linked_skill(session_id)
-
-    return {
-        "todos": todos,
-        "fileHistory": file_history,
-        "debugLogs": debug_logs,
-        "linkedPlan": linked_plan,
-        "linkedSkill": linked_skill,
-    }
-
-
 @router.get("/{session_id}/todos")
 async def get_todos(
     session_id: str = PathParam(

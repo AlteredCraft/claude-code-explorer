@@ -52,7 +52,7 @@ async def get_skill_info(skill_path: Path, name: str) -> dict:
 async def list_skills() -> dict[str, list[Skill]]:
     """List all skills.
 
-    Returns skills from ~/.claude/skills/. Each skill is a directory
+    Returns all known skills. Each skill is a directory
     containing SKILL.md with YAML frontmatter (name, description, allowed-tools).
     Skills may be symlinks to external directories.
 
@@ -81,7 +81,7 @@ async def list_skills() -> dict[str, list[Skill]]:
 @router.get("/{name}", response_model=Skill)
 async def get_skill(
     name: str = PathParam(
-        description="Skill directory name (e.g., 'dev-journal', 'frontend-design')"
+        description="Skill name (e.g., 'dev-journal', 'frontend-design')"
     )
 ) -> Skill:
     """Get a specific skill with full content.
@@ -93,7 +93,7 @@ async def get_skill(
     pointing to the resolved absolute path.
 
     Args:
-        name: Skill directory name
+        name: Skill name
 
     Returns:
         Skill object with name, description, allowedTools, content, and symlink info

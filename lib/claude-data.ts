@@ -48,7 +48,7 @@ export async function getProjects(): Promise<Project[]> {
 
         return {
           path: decodedPath,
-          encodedPath: dir.name,
+          projectId: dir.name,
           lastSessionId: projectConfig?.lastSessionId,
           lastCost: projectConfig?.lastCost,
           lastDuration: projectConfig?.lastDuration,

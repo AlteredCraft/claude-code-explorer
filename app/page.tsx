@@ -150,10 +150,10 @@ export default async function HomePage() {
             <TableBody>
               {projectsWithSessions.map((project) => {
                 return (
-                  <TableRow key={project.encodedPath} className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                  <TableRow key={project.projectId} className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
                     <TableCell>
                       <Link
-                        href={`/projects/${encodeForUrl(project.encodedPath)}`}
+                        href={`/projects/${encodeForUrl(project.projectId)}`}
                         className="block"
                       >
                         <div className="font-medium text-zinc-900 dark:text-zinc-100">
@@ -173,26 +173,26 @@ export default async function HomePage() {
                       </Link>
                     </TableCell>
                     <TableCell>
-                      <Link href={`/projects/${encodeForUrl(project.encodedPath)}`}>
+                      <Link href={`/projects/${encodeForUrl(project.projectId)}`}>
                         <Badge variant="secondary">{project.sessionCount}</Badge>
                       </Link>
                     </TableCell>
                     <TableCell>
-                      <Link href={`/projects/${encodeForUrl(project.encodedPath)}`}>
+                      <Link href={`/projects/${encodeForUrl(project.projectId)}`}>
                         <span className="text-sm text-zinc-600 dark:text-zinc-400">
                           {formatRelativeTime(project.lastActivity)}
                         </span>
                       </Link>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Link href={`/projects/${encodeForUrl(project.encodedPath)}`}>
+                      <Link href={`/projects/${encodeForUrl(project.projectId)}`}>
                         <span className="text-sm font-mono text-zinc-600 dark:text-zinc-400">
                           {formatCost(project.lastCost)}
                         </span>
                       </Link>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Link href={`/projects/${encodeForUrl(project.encodedPath)}`}>
+                      <Link href={`/projects/${encodeForUrl(project.projectId)}`}>
                         <span className="text-sm font-mono text-zinc-600 dark:text-zinc-400">
                           {formatTokens(project.lastTotalInputTokens)} / {formatTokens(project.lastTotalOutputTokens)}
                         </span>
@@ -201,7 +201,7 @@ export default async function HomePage() {
                     <TableCell>
                       {!project.isOrphan && (
                         <ProjectConfigModal
-                          encodedPath={project.encodedPath}
+                          projectId={project.projectId}
                           projectName={project.name}
                         />
                       )}
@@ -252,7 +252,7 @@ export default async function HomePage() {
               </TableHeader>
               <TableBody>
                 {configOnlyProjects.map((project) => (
-                  <TableRow key={project.encodedPath} className="opacity-60">
+                  <TableRow key={project.projectId} className="opacity-60">
                     <TableCell>
                       <div className="font-medium text-zinc-900 dark:text-zinc-100">
                         {project.name}
@@ -271,7 +271,7 @@ export default async function HomePage() {
                     </TableCell>
                     <TableCell>
                       <ProjectConfigModal
-                        encodedPath={project.encodedPath}
+                        projectId={project.projectId}
                         projectName={project.name}
                       />
                     </TableCell>

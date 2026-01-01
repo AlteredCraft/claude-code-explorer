@@ -27,13 +27,13 @@ interface PageProps {
 
 export default async function SessionPage({ params }: PageProps) {
   const { id, sessionId } = await params;
-  const encodedPath = decodeFromUrl(id);
-  const decodedPath = decodeProjectPath(encodedPath);
+  const projectId = decodeFromUrl(id);
+  const decodedPath = decodeProjectPath(projectId);
   const projectName = getProjectName(decodedPath);
 
   const [sessionDetail, messagesResponse] = await Promise.all([
-    getSession(encodedPath, sessionId),
-    getSessionMessages(encodedPath, sessionId, { limit: 100 }),
+    getSession(projectId, sessionId),
+    getSessionMessages(projectId, sessionId, { limit: 100 }),
   ]);
 
   const messages = messagesResponse.data;
@@ -79,7 +79,7 @@ export default async function SessionPage({ params }: PageProps) {
           <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
             {startTime.toLocaleString()}
           </p>
-          <SourcePath path={`~/.claude/projects/${encodedPath}/${sessionId}.jsonl`} className="mt-1" />
+          <SourcePath path={`~/.claude/projects/${projectId}/${sessionId}.jsonl`} className="mt-1" />
         </div>
         {metadata.model && (
           <Badge variant="outline">{metadata.model.replace('claude-', '').replace(/-\d+$/, '')}</Badge>

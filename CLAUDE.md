@@ -143,17 +143,17 @@ uv run python scripts/validate_openapi.py
 
 The script compares paths, methods, and schemas between the specs.
 
-## Path Encoding
+## Project ID Encoding
 
-Claude Code stores project data in `~/.claude/projects/{encoded_path}/`. The encoding replaces **all non-alphanumeric characters** with `-`:
+Claude Code stores project data in `~/.claude/projects/{project_id}/`. The project ID is derived from the path by replacing **all non-alphanumeric characters** with `-`:
 
 ```python
 re.sub(r"[^a-zA-Z0-9]", "-", path)
 ```
 
 Examples:
-| Real Path | Encoded Directory |
-|-----------|-------------------|
+| Real Path | Project ID |
+|-----------|-----------|
 | `/Users/sam/Projects/foo` | `-Users-sam-Projects-foo` |
 | `/Users/sam/_PRIMARY_VAULT` | `-Users-sam--PRIMARY-VAULT` |
 
