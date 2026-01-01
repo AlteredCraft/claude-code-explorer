@@ -71,7 +71,7 @@ async def get_session_bounds(
         content = file_path.read_text()
         lines = parse_jsonl_file(content)
 
-        start_time = datetime.now()
+        start_time = None  # Don't default to now - remain undetermined if no timestamps
         end_time = None
         message_count = 0
         model = None
@@ -82,10 +82,10 @@ async def get_session_bounds(
             message_count += 1
 
             timestamp = parse_timestamp(parsed.get("timestamp"))
-            if i == 0 and timestamp:
-                start_time = timestamp
             if timestamp:
-                end_time = timestamp
+                if start_time is None:  # First valid timestamp = start
+                    start_time = timestamp
+                end_time = timestamp  # Last valid timestamp = end
             if parsed.get("type") == "assistant":
                 msg = parsed.get("message", {})
                 if msg.get("model"):
@@ -98,7 +98,7 @@ async def get_session_bounds(
             "model": model,
         }
     except Exception:
-        return {"start_time": datetime.now(), "message_count": 0}
+        return {"start_time": None, "end_time": None, "message_count": 0}
 
 
 async def get_session_messages_raw(
@@ -278,7 +278,7 @@ async def get_project(encoded_path: str):
         recent_sessions.append({
             "id": session_id,
             "projectPath": decoded_path,
-            "startTime": bounds["start_time"].isoformat(),
+            "startTime": bounds["start_time"].isoformat() if bounds["start_time"] else None,
             "endTime": bounds["end_time"].isoformat() if bounds["end_time"] else None,
             "messageCount": bounds["message_count"],
             "model": bounds.get("model"),
@@ -363,7 +363,7 @@ async def list_sessions(
         sessions.append({
             "id": session_id,
             "projectPath": decoded_path,
-            "startTime": bounds["start_time"].isoformat(),
+            "startTime": bounds["start_time"].isoformat() if bounds["start_time"] else None,
             "endTime": bounds["end_time"].isoformat() if bounds["end_time"] else None,
             "messageCount": bounds["message_count"],
             "model": bounds.get("model"),
@@ -411,7 +411,7 @@ async def get_session(encoded_path: str, session_id: str):
     correlated = await get_correlated_data(session_id)
 
     duration = None
-    if bounds["end_time"]:
+    if bounds["start_time"] and bounds["end_time"]:
         # Normalize to naive datetimes to avoid mixing aware/naive
         end = bounds["end_time"].replace(tzinfo=None) if bounds["end_time"].tzinfo else bounds["end_time"]
         start = bounds["start_time"].replace(tzinfo=None) if bounds["start_time"].tzinfo else bounds["start_time"]
@@ -420,7 +420,7 @@ async def get_session(encoded_path: str, session_id: str):
     return {
         "id": session_id,
         "projectPath": decoded_path,
-        "startTime": bounds["start_time"].isoformat(),
+        "startTime": bounds["start_time"].isoformat() if bounds["start_time"] else None,
         "endTime": bounds["end_time"].isoformat() if bounds["end_time"] else None,
         "messageCount": bounds["message_count"],
         "model": bounds.get("model"),
