@@ -72,32 +72,24 @@ This is the authoritative source for project paths. The encoded directory names 
    - Added `export const dynamic = 'force-dynamic'` to page.tsx
    - Fixed null handling in formatCost/formatTokens
 
+5. **Orphan directory path resolution** (`api-py/src/utils.py`, `api-py/src/routes/projects.py`):
+   - Added `extract_cwd_from_project_dir()` to extract real paths from agent file `cwd` field
+   - Orphan directories (no config entry) now use cwd heuristic before fallback decode
+   - Added `isOrphan: bool` field to Project model
+   - UI shows "(inferred)" indicator with tooltip for orphan projects
+
 ### Current State
 
 The UI now shows:
-- **Projects**: 30 projects with session data (clickable, full metadata)
-- **Other Projects**: 20 config-only projects (initialized but never used)
+- **Projects**: ~30 projects with session data (clickable, full metadata)
+- **Other Projects**: ~20 config-only projects (initialized but never used)
+- Orphan projects display accurate paths (e.g., `~/.vibe` instead of garbled `//Users//sam//-vibe`)
 
 ---
 
 ## Remaining Work
 
-### 1. Orphan Directory Handling
-
-NOTE: I am seeing a common pattern, where orphan project have an empty session.jsonl file but a few agent.json files. In those agent files there is a `cwd` key which has the true directory as the value. Can we still list any projects without config entries under 'other' but have a heuristic to look for this cwd key to show a more accurate path?
-
-**Problem**: Some directories in `~/.claude/projects/` don't have a matching entry in `~/.claude.json`. These "orphan" directories use a fallback decode that may produce incorrect paths (e.g., `-Users-sam--vibe` → `~//vibe` instead of `~/.vibe`).
-
-**Current behavior**: Fallback decode only handles leading `-` → `/`, but doesn't distinguish `.`, `_`, or `-` in the middle of paths.
-
-**Options**:
-1. **Accept imperfect decode**: Show orphans with a visual indicator that the path may be approximate
-2. **Hide orphans**: Don't show directories without config entries
-3. **Heuristic decode**: Try common patterns (e.g., `--` often means `/.` for hidden dirs)
-
-**Recommendation**: Option 1 with a tooltip explaining the path may not be exact.
-
-### 2. Phase 2: User-Configurable Project Folders (Deferred)
+### 1. Phase 2: User-Configurable Project Folders (Deferred)
 
 **Goal**: Let users group projects under custom folders (e.g., "Work", "Personal", "Open Source").
 
@@ -124,18 +116,17 @@ NOTE: I am seeing a common pattern, where orphan project have an empty session.j
 - Store folder config in `~/.claude/explorer-settings.json` or similar
 - UI to create/edit folders and drag projects into them
 - "Others Found" is the catch-all for ungrouped projects
-- Orphan directories could be shown here with "path may be approximate" indicator
 
-### 3. API Spec Validation
+### 2. API Spec Validation
 
 The API has evolved since the original spec. Need to:
 1. Run `uv run python scripts/validate_openapi.py` to check drift
 2. Update `docs/api-spec.yaml` if needed
-3. Ensure `hasSessionData` field is documented
+3. Ensure `hasSessionData` and `isOrphan` fields are documented
 
-### 4. TypeScript API Client Sync
+### 3. TypeScript API Client Sync
 
-The TypeScript API client (`lib/api-client.ts`) was updated with `hasSessionData`, but should verify all types match the Python models exactly.
+The TypeScript API client (`lib/api-client.ts`) was updated with `hasSessionData` and `isOrphan`, but should verify all types match the Python models exactly.
 
 ---
 
@@ -143,11 +134,11 @@ The TypeScript API client (`lib/api-client.ts`) was updated with `hasSessionData
 
 | File | Purpose |
 |------|---------|
-| `api-py/src/utils.py` | Path encoding/decoding functions |
-| `api-py/src/routes/projects.py` | Project listing with config lookup |
-| `api-py/src/models.py` | Pydantic models (hasSessionData field) |
+| `api-py/src/utils.py` | Path encoding/decoding, cwd extraction |
+| `api-py/src/routes/projects.py` | Project listing with config lookup and orphan handling |
+| `api-py/src/models.py` | Pydantic models (hasSessionData, isOrphan fields) |
 | `lib/api-client.ts` | TypeScript API client types |
-| `app/page.tsx` | Homepage with two-section project list |
+| `app/page.tsx` | Homepage with project list and orphan indicators |
 | `docs/api-spec.yaml` | OpenAPI spec (source of truth) |
 
 ---
@@ -166,5 +157,5 @@ python3 -c "import re; print(re.sub(r'[^a-zA-Z0-9]', '-', '/Users/sam/Projects/f
 
 To test the API:
 ```bash
-curl http://localhost:3001/api/v1/projects | jq '.data[] | {name, hasSessionData, displayPath}'
+curl http://localhost:3001/api/v1/projects/ | jq '.data[] | {name, hasSessionData, isOrphan, displayPath}'
 ```
