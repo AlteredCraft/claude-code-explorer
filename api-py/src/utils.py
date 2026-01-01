@@ -1,7 +1,6 @@
 """Utility functions for Claude Explorer API."""
 
 import json
-import os
 import re
 from pathlib import Path
 from datetime import datetime
@@ -65,6 +64,28 @@ def build_path_lookup(config: dict[str, Any]) -> dict[str, str]:
         encoded = encode_project_path(real_path)
         lookup[encoded] = real_path
     return lookup
+
+
+def extract_cwd_from_project_dir(project_dir: Path) -> str | None:
+    """Extract cwd from agent files in an orphan project directory.
+
+    For directories not in config, agent files contain a `cwd` field with
+    the actual working directory. This provides accurate paths when the
+    encoded directory name can't be reliably decoded.
+
+    Returns the cwd from the first agent file found, or None if not available.
+    """
+    for agent_file in project_dir.glob("agent-*.jsonl"):
+        try:
+            with open(agent_file) as f:
+                first_line = f.readline()
+                if first_line:
+                    entry = json.loads(first_line)
+                    if cwd := entry.get("cwd"):
+                        return cwd
+        except (json.JSONDecodeError, OSError):
+            continue
+    return None
 
 
 def parse_jsonl_file(content: str) -> list[dict[str, Any]]:

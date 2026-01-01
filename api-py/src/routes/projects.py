@@ -30,6 +30,7 @@ from ..utils import (
     build_path_lookup,
     decode_project_path,
     encode_project_path,
+    extract_cwd_from_project_dir,
     get_claude_config,
     get_claude_dir,
     get_display_path,
@@ -161,7 +162,15 @@ async def list_projects(
         if not entry.is_dir():
             continue
 
-        decoded_path = path_lookup.get(entry.name) or decode_project_path(entry.name)
+        # Try config lookup first, then agent file cwd, then fallback decode
+        if entry.name in path_lookup:
+            decoded_path = path_lookup[entry.name]
+            is_orphan = False
+        else:
+            # Orphan directory - try to get real path from agent files
+            decoded_path = extract_cwd_from_project_dir(entry) or decode_project_path(entry.name)
+            is_orphan = True
+
         project_config = config_projects.get(decoded_path, {})
         session_files = await get_session_files(entry.name)
 
@@ -176,6 +185,7 @@ async def list_projects(
             "name": get_project_name(decoded_path),
             "sessionCount": len(session_files),
             "hasSessionData": True,
+            "isOrphan": is_orphan,
             "lastSessionId": project_config.get("lastSessionId"),
             "lastActivity": last_activity,
             "lastCost": project_config.get("lastCost"),
@@ -202,6 +212,7 @@ async def list_projects(
             "name": get_project_name(real_path),
             "sessionCount": 0,
             "hasSessionData": False,
+            "isOrphan": False,
             "lastSessionId": project_config.get("lastSessionId"),
             "lastActivity": None,
             "lastCost": project_config.get("lastCost"),

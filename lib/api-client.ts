@@ -23,6 +23,7 @@ export interface Project {
   name: string;
   sessionCount: number;
   hasSessionData: boolean;
+  isOrphan: boolean;
   lastSessionId?: string;
   lastActivity?: string;
   lastCost?: number;

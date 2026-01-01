@@ -37,6 +37,7 @@ class Project(BaseModel):
     last_total_input_tokens: int | None = Field(None, alias="lastTotalInputTokens")
     last_total_output_tokens: int | None = Field(None, alias="lastTotalOutputTokens")
     has_session_data: bool = Field(True, alias="hasSessionData")
+    is_orphan: bool = Field(False, alias="isOrphan")
 
     class Config:
         populate_by_name = True

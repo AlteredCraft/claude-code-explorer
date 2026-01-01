@@ -84,6 +84,8 @@ The UI now shows:
 
 ### 1. Orphan Directory Handling
 
+NOTE: I am seeing a common pattern, where orphan project have an empty session.jsonl file but a few agent.json files. In those agent files there is a `cwd` key which has the true directory as the value. Can we still list any projects without config entries under 'other' but have a heuristic to look for this cwd key to show a more accurate path?
+
 **Problem**: Some directories in `~/.claude/projects/` don't have a matching entry in `~/.claude.json`. These "orphan" directories use a fallback decode that may produce incorrect paths (e.g., `-Users-sam--vibe` → `~//vibe` instead of `~/.vibe`).
 
 **Current behavior**: Fallback decode only handles leading `-` → `/`, but doesn't distinguish `.`, `_`, or `-` in the middle of paths.

@@ -102,6 +102,14 @@ export default async function HomePage() {
                         </div>
                         <div className="text-xs text-zinc-500 dark:text-zinc-500 font-mono">
                           {project.displayPath}
+                          {project.isOrphan && (
+                            <span
+                              className="ml-1 text-zinc-400 dark:text-zinc-600"
+                              title="Path inferred from session data (not in config)"
+                            >
+                              (inferred)
+                            </span>
+                          )}
                         </div>
                       </Link>
                     </TableCell>
