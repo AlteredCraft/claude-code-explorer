@@ -13,6 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProjectConfigModal } from '@/components/project-config-modal';
+import { ColumnInfoModal } from '@/components/column-info-modal';
 import Link from 'next/link';
 
 function encodeForUrl(str: string): string {
@@ -82,11 +83,46 @@ export default async function HomePage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[300px]">Project</TableHead>
-                <TableHead>Sessions</TableHead>
-                <TableHead>Last Activity</TableHead>
-                <TableHead className="text-right">Last Cost</TableHead>
-                <TableHead className="text-right">Tokens (In/Out)</TableHead>
+                <TableHead className="w-[300px]">
+                  Project
+                  <ColumnInfoModal title="Project">
+                    <p>The project name and path are derived from the directory structure in <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">~/.claude/projects/</code>.</p>
+                    <p>Directory names are encoded (e.g., <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">-Users-sam-Projects-foo</code>) and decoded back to real paths using the config lookup from <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">~/.claude.json</code>.</p>
+                    <p>Projects marked &quot;(inferred)&quot; are orphans where the path was extracted from session file metadata.</p>
+                  </ColumnInfoModal>
+                </TableHead>
+                <TableHead>
+                  Sessions
+                  <ColumnInfoModal title="Sessions">
+                    <p>Count of <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">.jsonl</code> session files in the project directory.</p>
+                    <p>Each session file contains the conversation transcript for one Claude Code session, including user messages, assistant responses, and tool calls.</p>
+                    <p>Files prefixed with <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">agent-</code> are sub-agent sessions spawned during a parent session.</p>
+                  </ColumnInfoModal>
+                </TableHead>
+                <TableHead>
+                  Last Activity
+                  <ColumnInfoModal title="Last Activity">
+                    <p>The file modification time of the most recent session file in the project directory.</p>
+                    <p>This reflects when the last message was written to any session, giving a sense of when you last worked on this project with Claude.</p>
+                  </ColumnInfoModal>
+                </TableHead>
+                <TableHead className="text-right">
+                  Last Cost
+                  <ColumnInfoModal title="Last Cost">
+                    <p>The <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">lastCost</code> field from the project entry in <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">~/.claude.json</code>.</p>
+                    <p>This represents the API cost of the most recent session, calculated from token usage and model pricing.</p>
+                    <p>Note: This is only the last session&apos;s cost, not cumulative project cost.</p>
+                  </ColumnInfoModal>
+                </TableHead>
+                <TableHead className="text-right">
+                  Tokens (In/Out)
+                  <ColumnInfoModal title="Tokens (In/Out)">
+                    <p>Token counts from <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">lastTotalInputTokens</code> and <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">lastTotalOutputTokens</code> in <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">~/.claude.json</code>.</p>
+                    <p><strong>Input tokens:</strong> Your prompts, file contents, and context sent to Claude.</p>
+                    <p><strong>Output tokens:</strong> Claude&apos;s responses, code, and tool calls.</p>
+                    <p>These are from the last session only, displayed as K (thousands) or M (millions).</p>
+                  </ColumnInfoModal>
+                </TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -169,9 +205,27 @@ export default async function HomePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[300px]">Project</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Last Cost</TableHead>
+                  <TableHead className="w-[300px]">
+                    Project
+                    <ColumnInfoModal title="Project">
+                      <p>These projects exist in <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">~/.claude.json</code> but have no session files in <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">~/.claude/projects/</code>.</p>
+                      <p>This typically means the project was initialized (Claude Code was run there) but no conversation was saved.</p>
+                    </ColumnInfoModal>
+                  </TableHead>
+                  <TableHead>
+                    Status
+                    <ColumnInfoModal title="Status">
+                      <p>Indicates whether session files exist for this project.</p>
+                      <p>&quot;No sessions&quot; means the project directory either doesn&apos;t exist or contains no <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">.jsonl</code> files.</p>
+                    </ColumnInfoModal>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    Last Cost
+                    <ColumnInfoModal title="Last Cost">
+                      <p>The <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">lastCost</code> field from <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">~/.claude.json</code>.</p>
+                      <p>Even without session files, Claude Code may have recorded the cost of past interactions in the config.</p>
+                    </ColumnInfoModal>
+                  </TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
