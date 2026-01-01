@@ -1,6 +1,18 @@
 export const dynamic = 'force-dynamic'; // Disable static pre-rendering
 
-import { getProjects } from '@/lib/api-client';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
+import { getProjects, type AppSettings } from '@/lib/api-client';
+
+async function getServerAppSettings(): Promise<AppSettings> {
+  try {
+    const configPath = join(process.cwd(), '.config', 'app.json');
+    const content = await readFile(configPath, 'utf-8');
+    return JSON.parse(content) as AppSettings;
+  } catch {
+    return { pathPrefix: [] };
+  }
+}
 import { SourcePath } from '@/components/source-path';
 import {
   Table,
@@ -51,8 +63,12 @@ function formatTokens(tokens: number | undefined | null): string {
 }
 
 export default async function HomePage() {
-  const response = await getProjects();
+  const settings = await getServerAppSettings();
+  const response = await getProjects({
+    pathPrefix: settings.pathPrefix.length > 0 ? settings.pathPrefix : undefined,
+  });
   const projects = response.data;
+  const hasActiveFilters = settings.pathPrefix.length > 0;
 
   // Split into projects with sessions and config-only projects
   const projectsWithSessions = projects.filter(p => p.hasSessionData);
@@ -64,6 +80,11 @@ export default async function HomePage() {
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Projects</h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
           {projectsWithSessions.length} projects with sessions, {configOnlyProjects.length} initialized only
+          {hasActiveFilters && (
+            <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
+              (filtered: {settings.pathPrefix.join(', ')})
+            </span>
+          )}
         </p>
         <div className="flex items-center gap-2 mt-1">
           <SourcePath path="~/.claude.json" />

@@ -231,12 +231,16 @@ export async function getProjects(options?: {
   sortOrder?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
+  pathPrefix?: string[];
 }): Promise<PaginatedResponse<Project>> {
   const params = new URLSearchParams();
   if (options?.sortBy) params.set('sortBy', options.sortBy);
   if (options?.sortOrder) params.set('sortOrder', options.sortOrder);
   if (options?.limit) params.set('limit', String(options.limit));
   if (options?.offset) params.set('offset', String(options.offset));
+  if (options?.pathPrefix) {
+    options.pathPrefix.forEach(p => params.append('pathPrefix', p));
+  }
 
   const query = params.toString();
   return fetchApi(`/projects${query ? `?${query}` : ''}`);
@@ -497,4 +501,29 @@ export async function getConfig(): Promise<Record<string, unknown>> {
 
 export async function getSettings(): Promise<Record<string, unknown>> {
   return fetchApi('/config/settings');
+}
+
+// App Settings API (local Next.js API for .config/app.json)
+export interface AppSettings {
+  pathPrefix: string[];
+}
+
+export async function getAppSettings(): Promise<AppSettings> {
+  const response = await fetch('/api/settings', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error('Failed to load app settings');
+  }
+  return response.json();
+}
+
+export async function updateAppSettings(settings: AppSettings): Promise<AppSettings> {
+  const response = await fetch('/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to save app settings');
+  }
+  return response.json();
 }

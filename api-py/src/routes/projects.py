@@ -35,6 +35,7 @@ from ..utils import (
     get_claude_dir,
     get_display_path,
     get_project_name,
+    normalize_path_prefix,
     parse_jsonl_file,
     parse_timestamp,
 )
@@ -145,6 +146,7 @@ async def list_projects(
     sort_order: Literal["asc", "desc"] = Query("desc", alias="sortOrder"),
     limit: int = Query(50, le=100),
     offset: int = Query(0, ge=0),
+    path_prefix: list[str] = Query([], alias="pathPrefix"),
 ):
     """List all projects."""
     claude_dir = get_claude_dir()
@@ -220,6 +222,14 @@ async def list_projects(
             "lastTotalInputTokens": project_config.get("lastTotalInputTokens"),
             "lastTotalOutputTokens": project_config.get("lastTotalOutputTokens"),
         })
+
+    # Filter by path prefix(es)
+    if path_prefix:
+        normalized_prefixes = [normalize_path_prefix(p) for p in path_prefix]
+        projects = [
+            p for p in projects
+            if any(p["path"].startswith(prefix) for prefix in normalized_prefixes)
+        ]
 
     # Sort
     def sort_key(p):

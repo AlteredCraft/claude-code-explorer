@@ -45,3 +45,5 @@ __pycache__
 *.pyo
 *.pyd
 .venv/
+
+/.config/

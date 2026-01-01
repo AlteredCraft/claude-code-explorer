@@ -40,6 +40,16 @@ def get_display_path(path: str) -> str:
     return path
 
 
+def normalize_path_prefix(path: str) -> str:
+    """Normalize a path prefix for comparison.
+
+    - Expands ~ to home directory
+    - Removes trailing slashes
+    """
+    import os
+    return os.path.expanduser(path).rstrip("/")
+
+
 def get_project_name(path: str) -> str:
     """Extract the project name from a path."""
     parts = path.split("/")

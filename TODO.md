@@ -87,35 +87,45 @@ The UI now shows:
 
 ---
 
+## Completed Work (Phase 2)
+
+### Path Prefix Filtering
+
+**Goal**: Let users filter projects by path prefix (e.g., only show projects under `~/Projects`).
+
+**What was implemented**:
+
+1. **API: `pathPrefix` query parameter** (`api-py/src/routes/projects.py`):
+   - `GET /api/v1/projects/?pathPrefix=~/Projects` filters to matching paths
+   - Supports multiple prefixes via repeated params: `?pathPrefix=~/Projects&pathPrefix=~/Work`
+   - Expands `~` to home directory server-side
+
+2. **Settings UI** (`components/settings-modal.tsx`):
+   - Gear icon in header opens settings modal
+   - Add/remove path prefix filters
+   - Settings saved to `.config/app.json`
+
+3. **Next.js API route** (`app/api/settings/route.ts`):
+   - GET/PUT for reading/writing `.config/app.json`
+   - Client-side persistence (no changes to api-py)
+
+4. **Home page integration** (`app/page.tsx`):
+   - Reads settings server-side
+   - Passes `pathPrefix` to API call
+   - Shows filter indicator when active: "(filtered: ~/Projects)"
+
+**Files added**:
+- `app/api/settings/route.ts` - Next.js API route for settings
+- `components/settings-modal.tsx` - Settings modal component
+- `.config/app.json` - User settings (gitignored)
+
+---
+
 ## Remaining Work
 
-### 1. Phase 2: User-Configurable Project Folders (Deferred)
+### 1. Project Folders UI (Future Enhancement)
 
-**Goal**: Let users group projects under custom folders (e.g., "Work", "Personal", "Open Source").
-
-**Proposed UX**:
-```
-## Project Folders (user-defined groups)
-
-### Work
-  - acme-corp-api
-  - acme-corp-frontend
-
-### Personal
-  - dotfiles
-  - blog
-
-### Open Source
-  - my-library
-
-## Others Found
-(projects not in any folder - both config projects and orphan directories)
-```
-
-**Implementation notes**:
-- Store folder config in `~/.claude/explorer-settings.json` or similar
-- UI to create/edit folders and drag projects into them
-- "Others Found" is the catch-all for ungrouped projects
+Group projects into named folders (e.g., "Work", "Personal"). This would build on path prefix filtering with a more visual organization.
 
 ### 2. API Spec Validation
 
@@ -134,11 +144,14 @@ The TypeScript API client (`lib/api-client.ts`) was updated with `hasSessionData
 
 | File | Purpose |
 |------|---------|
-| `api-py/src/utils.py` | Path encoding/decoding, cwd extraction |
-| `api-py/src/routes/projects.py` | Project listing with config lookup and orphan handling |
+| `api-py/src/utils.py` | Path encoding/decoding, cwd extraction, path normalization |
+| `api-py/src/routes/projects.py` | Project listing with config lookup, orphan handling, path filtering |
 | `api-py/src/models.py` | Pydantic models (hasSessionData, isOrphan fields) |
-| `lib/api-client.ts` | TypeScript API client types |
-| `app/page.tsx` | Homepage with project list and orphan indicators |
+| `lib/api-client.ts` | TypeScript API client types and functions |
+| `app/page.tsx` | Homepage with project list, filtering, and orphan indicators |
+| `app/api/settings/route.ts` | Next.js API route for app settings |
+| `components/settings-modal.tsx` | Settings modal for path prefix configuration |
+| `.config/app.json` | User settings (gitignored) |
 | `docs/api-spec.yaml` | OpenAPI spec (source of truth) |
 
 ---
