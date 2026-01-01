@@ -246,6 +246,13 @@ export async function getProject(encodedPath: string): Promise<ProjectDetail> {
   return fetchApi(`/projects/${encodeURIComponent(encodedPath)}`);
 }
 
+export async function getProjectConfig(encodedPath: string): Promise<{
+  path: string;
+  config: Record<string, unknown>;
+}> {
+  return fetchApi(`/projects/${encodeURIComponent(encodedPath)}/config`);
+}
+
 // Sessions API
 export async function getProjectSessions(
   encodedPath: string,

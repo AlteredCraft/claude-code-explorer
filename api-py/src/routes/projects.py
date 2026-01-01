@@ -318,6 +318,23 @@ async def get_project(encoded_path: str):
     }
 
 
+@router.get("/{encoded_path}/config")
+async def get_project_config(encoded_path: str):
+    """Get raw config entry from ~/.claude.json for a project."""
+    decoded_encoded_path = unquote(encoded_path)
+    config = await get_claude_config()
+    path_lookup = build_path_lookup(config)
+
+    decoded_path = path_lookup.get(decoded_encoded_path)
+    if not decoded_path:
+        raise HTTPException(status_code=404, detail="Project not in config (orphan)")
+
+    config_projects = config.get("projects", {})
+    project_config = config_projects.get(decoded_path, {})
+
+    return {"path": decoded_path, "config": project_config}
+
+
 # Sessions routes are nested under projects
 sessions_router = APIRouter(prefix="/projects/{encoded_path}/sessions", tags=["sessions"])
 

@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ProjectConfigModal } from '@/components/project-config-modal';
 import Link from 'next/link';
 
 function encodeForUrl(str: string): string {
@@ -86,6 +87,7 @@ export default async function HomePage() {
                 <TableHead>Last Activity</TableHead>
                 <TableHead className="text-right">Last Cost</TableHead>
                 <TableHead className="text-right">Tokens (In/Out)</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -139,6 +141,14 @@ export default async function HomePage() {
                         </span>
                       </Link>
                     </TableCell>
+                    <TableCell>
+                      {!project.isOrphan && (
+                        <ProjectConfigModal
+                          encodedPath={project.encodedPath}
+                          projectName={project.name}
+                        />
+                      )}
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -162,6 +172,7 @@ export default async function HomePage() {
                   <TableHead className="w-[300px]">Project</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Last Cost</TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -182,6 +193,12 @@ export default async function HomePage() {
                       <span className="text-sm font-mono text-zinc-600 dark:text-zinc-400">
                         {formatCost(project.lastCost)}
                       </span>
+                    </TableCell>
+                    <TableCell>
+                      <ProjectConfigModal
+                        encodedPath={project.encodedPath}
+                        projectName={project.name}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
