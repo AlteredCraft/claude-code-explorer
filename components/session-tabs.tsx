@@ -323,11 +323,7 @@ function MessageContent({ content }: { content: unknown }) {
               return <div key={idx}>{block.text}</div>;
             }
             if (block.type === 'thinking') {
-              return (
-                <div key={idx} className="text-zinc-500 italic">
-                  [Thinking: {(block.thinking || '').slice(0, 100)}...]
-                </div>
-              );
+              return <ThinkingBlock key={idx} block={block} />;
             }
             if (block.type === 'tool_use') {
               return <ToolUseBlock key={idx} block={block} />;
@@ -343,6 +339,32 @@ function MessageContent({ content }: { content: unknown }) {
   }
 
   return <pre className="text-xs">{JSON.stringify(content, null, 2)}</pre>;
+}
+
+function ThinkingBlock({ block }: { block: ContentBlock }) {
+  const [expanded, setExpanded] = useState(false);
+  const thinking = block.thinking || '';
+  const preview = thinking.length > 100 ? thinking.slice(0, 100) + '...' : thinking;
+
+  return (
+    <div className="border border-purple-300 dark:border-purple-800 rounded p-2 bg-purple-50 dark:bg-purple-950">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 w-full text-left"
+      >
+        <span className="text-zinc-400">{expanded ? '▼' : '▶'}</span>
+        <span className="text-purple-600 dark:text-purple-400 text-xs italic">thinking</span>
+        {!expanded && (
+          <span className="text-zinc-500 text-xs truncate flex-1 italic">{preview}</span>
+        )}
+      </button>
+      {expanded && (
+        <pre className="mt-2 text-sm text-zinc-700 dark:text-zinc-300 p-2 rounded bg-purple-100 dark:bg-purple-900 overflow-auto max-h-96 whitespace-pre-wrap">
+          {thinking}
+        </pre>
+      )}
+    </div>
+  );
 }
 
 function ToolUseBlock({ block }: { block: ContentBlock }) {
