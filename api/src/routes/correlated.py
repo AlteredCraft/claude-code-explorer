@@ -16,7 +16,6 @@ from ..models import (
     CorrelatedData,
     FileBackupContent,
     FileHistoryEntry,
-    SubAgentResponse,
     TodoItem,
 )
 from ..utils import get_claude_dir, parse_jsonl_file
@@ -193,8 +192,23 @@ async def find_linked_skill(session_id: str) -> str | None:
     return None
 
 
-async def find_sub_agent_sessions(session_id: str) -> dict:
-    """Find sub-agent sessions for a given session."""
+async def find_sub_agent_sessions(
+    session_id: str, project_dir: Path | None = None
+) -> dict:
+    """Find sub-agent sessions for a given session.
+
+    Uses the sessionId field in sub-agent messages to establish parent-child
+    relationships, not just filename pattern matching.
+
+    Args:
+        session_id: The parent session UUID to find sub-agents for
+        project_dir: Optional project directory path (skips directory scan if provided)
+
+    Returns:
+        Dict with parentSessionId (if this is a sub-agent) and subAgents list
+    """
+    from datetime import datetime
+
     claude_dir = get_claude_dir()
     projects_dir = claude_dir / "projects"
     is_agent_session = session_id.startswith("agent-")
@@ -205,64 +219,84 @@ async def find_sub_agent_sessions(session_id: str) -> dict:
     if not projects_dir.exists():
         return {"parentSessionId": parent_session_id, "subAgents": sub_agents}
 
-    for project_dir in projects_dir.iterdir():
-        if not project_dir.is_dir():
-            continue
+    # Find the project directory if not provided
+    if project_dir is None:
+        for dir_entry in projects_dir.iterdir():
+            if not dir_entry.is_dir():
+                continue
+            if (dir_entry / f"{session_id}.jsonl").exists():
+                project_dir = dir_entry
+                break
 
-        session_files = [f.name for f in project_dir.iterdir() if f.suffix == ".jsonl"]
+    if project_dir is None:
+        return {"parentSessionId": parent_session_id, "subAgents": sub_agents}
 
-        # Check if this session exists in this project
-        if f"{session_id}.jsonl" not in session_files:
-            continue
+    decoded_path = "/" + project_dir.name.replace("-", "/")
 
-        # Found the project containing this session
-        decoded_path = "/" + project_dir.name.replace("-", "/")
+    if is_agent_session:
+        # For agent sessions, read the first message to get the parent sessionId
+        agent_path = project_dir / f"{session_id}.jsonl"
+        if agent_path.exists():
+            try:
+                content = agent_path.read_text()
+                lines = parse_jsonl_file(content)
+                if lines:
+                    first_msg = lines[0]
+                    # The sessionId field in agent messages points to the parent
+                    parent_session_id = first_msg.get("sessionId")
+            except Exception:
+                pass
+    else:
+        # For main sessions, find all agent files that reference this session
+        agent_files = [f for f in project_dir.iterdir()
+                      if f.suffix == ".jsonl" and f.name.startswith("agent-")]
 
-        if is_agent_session:
-            # For agent sessions, find potential parent (non-agent sessions)
-            main_sessions = [f for f in session_files if not f.startswith("agent-")]
-            if main_sessions:
-                parent_session_id = main_sessions[0].replace(".jsonl", "")
-        else:
-            # For main sessions, find all agent sessions in the same project
-            agent_files = [f for f in session_files if f.startswith("agent-")]
+        for agent_file in agent_files:
+            agent_id = agent_file.stem  # e.g., "agent-a6e31e7"
+            agent_path = agent_file
 
-            for agent_file in agent_files:
-                agent_id = agent_file.replace(".jsonl", "")
-                agent_path = project_dir / agent_file
-
-                try:
-                    content = agent_path.read_text()
-                    lines = parse_jsonl_file(content)
-                    message_count = 0
-                    start_time = None
-                    end_time = None
-                    model = None
-
-                    for parsed in lines:
-                        if parsed.get("type") in ("user", "assistant"):
-                            message_count += 1
-                            if not start_time and parsed.get("timestamp"):
-                                start_time = parsed["timestamp"]
-                            end_time = parsed.get("timestamp")
-                            if parsed.get("type") == "assistant" and not model:
-                                model = parsed.get("model")
-
-                    from datetime import datetime
-
-                    sub_agents.append({
-                        "id": agent_id,
-                        "projectPath": decoded_path,
-                        "startTime": start_time or datetime.now().isoformat(),
-                        "endTime": end_time,
-                        "messageCount": message_count,
-                        "model": model,
-                        "isAgent": True,
-                    })
-                except Exception:
+            try:
+                content = agent_path.read_text()
+                lines = parse_jsonl_file(content)
+                if not lines:
                     continue
 
-        break  # Found the project, no need to continue
+                # Check if this agent belongs to this session via sessionId field
+                first_msg = lines[0]
+                agent_parent_session_id = first_msg.get("sessionId")
+
+                if agent_parent_session_id != session_id:
+                    continue  # This agent belongs to a different session
+
+                # Parse agent session details
+                message_count = 0
+                start_time = None
+                end_time = None
+                model = None
+
+                for parsed in lines:
+                    if parsed.get("type") in ("user", "assistant"):
+                        message_count += 1
+                        if not start_time and parsed.get("timestamp"):
+                            start_time = parsed["timestamp"]
+                        end_time = parsed.get("timestamp")
+                        if parsed.get("type") == "assistant":
+                            msg = parsed.get("message", {})
+                            if isinstance(msg, dict) and msg.get("model"):
+                                model = msg["model"]
+
+                sub_agents.append({
+                    "id": agent_id,
+                    "projectPath": decoded_path,
+                    "startTime": start_time or datetime.now().isoformat(),
+                    "endTime": end_time,
+                    "messageCount": message_count,
+                    "model": model,
+                    "isAgent": True,
+                    "parentSessionId": session_id,
+                })
+            except Exception:
+                continue
 
     return {"parentSessionId": parent_session_id, "subAgents": sub_agents}
 
@@ -390,27 +424,6 @@ async def get_file_backup(
         "content": content,
         "size": size,
     }
-
-
-@router.get("/{session_id}/sub-agents")
-async def get_sub_agents(
-    session_id: str = PathParam(
-        description="Session UUID to find sub-agents for"
-    )
-) -> SubAgentResponse:
-    """Get sub-agent sessions spawned by Task tool.
-
-    Sub-agents are identified by 'agent-{shortId}.jsonl' filename pattern
-    in the same project directory as the parent session.
-
-    For main sessions: Returns list of sub-agent sessions in subAgents
-    For sub-agent sessions: Returns the parent session ID in parentSessionId
-
-    Returns:
-        SubAgentResponse with parentSessionId and/or subAgents list
-    """
-    result = await find_sub_agent_sessions(session_id)
-    return result
 
 
 @router.get("/{session_id}/environment")

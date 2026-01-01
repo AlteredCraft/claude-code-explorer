@@ -300,34 +300,56 @@ paths:
               schema:
                 $ref: '#/components/schemas/CorrelatedData'
 
-  /sessions/{sessionId}/sub-agents:
+  /projects/{encodedPath}/sessions/{sessionId}/sub-agents:
     get:
-      operationId: getSessionSubAgents
-      summary: Get sub-agent sessions
+      operationId: listSessionSubAgents
+      summary: List sub-agent sessions
       description: |
         Returns all sub-agent sessions spawned by this session via the Task tool.
+        Sub-agents are linked to their parent session via the sessionId field in their messages.
         For agent sessions, returns the parent session relationship.
       tags:
-        - Correlated Data
+        - Sessions
       parameters:
-        - $ref: '#/components/parameters/sessionIdPath'
+        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/sessionId'
       responses:
         '200':
           description: Sub-agent session list
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  parentSessionId:
-                    type: string
-                    nullable: true
-                    description: Parent session ID (if this is an agent session)
-                  subAgents:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Session'
-                    description: List of sub-agent sessions spawned by this session
+                $ref: '#/components/schemas/SubAgentResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{encodedPath}/sessions/{sessionId}/sub-agents/{agentId}:
+    get:
+      operationId: getSubAgent
+      summary: Get sub-agent details
+      description: |
+        Returns detailed information about a specific sub-agent session.
+        Validates that the sub-agent belongs to the specified parent session.
+      tags:
+        - Sessions
+      parameters:
+        - $ref: '#/components/parameters/encodedPath'
+        - $ref: '#/components/parameters/sessionId'
+        - name: agentId
+          in: path
+          required: true
+          description: Sub-agent ID (e.g., 'agent-a6e31e7' or just 'a6e31e7')
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sub-agent session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /sessions/{sessionId}/todos:
     get:
@@ -1107,6 +1129,22 @@ components:
           items:
             type: string
           description: List of sub-agent session IDs spawned by this session
+
+    SubAgentResponse:
+      type: object
+      required:
+        - parentSessionId
+        - subAgents
+      properties:
+        parentSessionId:
+          type: string
+          nullable: true
+          description: Parent session ID if this session is a sub-agent
+        subAgents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+          description: List of sub-agent sessions spawned by this session
 
     SessionDetail:
       allOf:

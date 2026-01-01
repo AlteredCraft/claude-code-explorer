@@ -17,6 +17,7 @@ from .routes.projects import (
     messages_router,
     router as projects_router,
     sessions_router,
+    sub_agents_router,
 )
 from .routes.shell_snapshots import router as shell_snapshots_router
 from .routes.skills import router as skills_router
@@ -47,6 +48,7 @@ API_PREFIX = "/api/v1"
 app.include_router(projects_router, prefix=API_PREFIX)
 app.include_router(sessions_router, prefix=API_PREFIX)
 app.include_router(messages_router, prefix=API_PREFIX)
+app.include_router(sub_agents_router, prefix=API_PREFIX)
 app.include_router(activity_router, prefix=API_PREFIX)
 app.include_router(correlated_router, prefix=API_PREFIX)
 app.include_router(plans_router, prefix=API_PREFIX)

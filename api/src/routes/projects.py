@@ -29,6 +29,7 @@ from ..models import (
     Session,
     SessionDetail,
     SessionMetadata,
+    SubAgentResponse,
     TodoItem,
 )
 from ..utils import (
@@ -726,6 +727,108 @@ async def get_message(
             return msg
 
     raise HTTPException(status_code=404, detail=f"Message not found: {message_id}")
+
+
+# Sub-agent routes nested under sessions
+sub_agents_router = APIRouter(
+    prefix="/projects/{encoded_path}/sessions/{session_id}/sub-agents",
+    tags=["sub-agents"],
+)
+
+
+@sub_agents_router.get("/", response_model=SubAgentResponse)
+async def list_sub_agents(
+    encoded_path: str = PathParam(
+        description="URL-encoded project path"
+    ),
+    session_id: str = PathParam(
+        description="Parent session UUID to find sub-agents for"
+    )
+) -> SubAgentResponse:
+    """List sub-agents spawned from this session.
+
+    Sub-agents are spawned via the Task tool during a session. They have
+    their own transcript files (agent-{shortId}.jsonl) but reference the
+    parent session via the sessionId field in their messages.
+
+    Returns:
+        SubAgentResponse with parentSessionId (if this is a sub-agent) and
+        subAgents list (if this is a main session with spawned agents)
+    """
+    from .correlated import find_sub_agent_sessions
+
+    decoded_encoded_path = unquote(encoded_path)
+    claude_dir = get_claude_dir()
+    project_dir = claude_dir / "projects" / decoded_encoded_path
+
+    if not project_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Project not found: {decoded_encoded_path}")
+
+    filename = f"{session_id}.jsonl"
+    if not (project_dir / filename).exists():
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+
+    result = await find_sub_agent_sessions(session_id, project_dir)
+    return result
+
+
+@sub_agents_router.get("/{agent_id}", response_model=SessionDetail)
+async def get_sub_agent(
+    encoded_path: str = PathParam(
+        description="URL-encoded project path"
+    ),
+    session_id: str = PathParam(
+        description="Parent session UUID"
+    ),
+    agent_id: str = PathParam(
+        description="Sub-agent ID (e.g., 'agent-a6e31e7' or just 'a6e31e7')"
+    )
+) -> SessionDetail:
+    """Get details for a specific sub-agent.
+
+    Returns the sub-agent session with full details including metadata
+    and correlated data.
+
+    Args:
+        encoded_path: URL-encoded project path
+        session_id: Parent session UUID
+        agent_id: Sub-agent ID (with or without 'agent-' prefix)
+
+    Returns:
+        SessionDetail for the sub-agent
+
+    Raises:
+        404: Sub-agent not found or doesn't belong to this session
+    """
+    from .correlated import find_sub_agent_sessions
+
+    decoded_encoded_path = unquote(encoded_path)
+    claude_dir = get_claude_dir()
+    project_dir = claude_dir / "projects" / decoded_encoded_path
+
+    if not project_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Project not found: {decoded_encoded_path}")
+
+    # Normalize agent_id to include 'agent-' prefix
+    normalized_agent_id = agent_id if agent_id.startswith("agent-") else f"agent-{agent_id}"
+
+    # Verify the sub-agent exists and belongs to this session
+    agent_file = project_dir / f"{normalized_agent_id}.jsonl"
+    if not agent_file.exists():
+        raise HTTPException(status_code=404, detail=f"Sub-agent not found: {agent_id}")
+
+    # Check that this agent actually belongs to the specified parent session
+    result = await find_sub_agent_sessions(session_id, project_dir)
+    agent_ids = [a["id"] for a in result.get("subAgents", [])]
+
+    if normalized_agent_id not in agent_ids:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Sub-agent {agent_id} does not belong to session {session_id}"
+        )
+
+    # Return the sub-agent's session details using the existing get_session logic
+    return await get_session(encoded_path, normalized_agent_id)
 
 
 # Activity routes

@@ -338,8 +338,23 @@ export async function getCorrelatedData(sessionId: string): Promise<CorrelatedDa
   return fetchApi(`/sessions/${sessionId}/correlated`);
 }
 
-export async function getSessionSubAgents(sessionId: string): Promise<SubAgentResponse> {
-  return fetchApi(`/sessions/${sessionId}/sub-agents`);
+export async function getSessionSubAgents(
+  encodedPath: string,
+  sessionId: string
+): Promise<SubAgentResponse> {
+  return fetchApi(
+    `/projects/${encodeURIComponent(encodedPath)}/sessions/${sessionId}/sub-agents/`
+  );
+}
+
+export async function getSubAgent(
+  encodedPath: string,
+  sessionId: string,
+  agentId: string
+): Promise<SessionDetail> {
+  return fetchApi(
+    `/projects/${encodeURIComponent(encodedPath)}/sessions/${sessionId}/sub-agents/${agentId}`
+  );
 }
 
 export async function getSessionTodos(sessionId: string): Promise<{ data: TodoItem[] }> {
