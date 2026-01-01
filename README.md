@@ -112,9 +112,15 @@ claude-explorer/
 4. **Session correlator** finds related data across directories by UUID
 5. **Pydantic models** auto-generate OpenAPI schema for type safety
 
-## TODOs
+## Roadmap
 
-- [ ] Plans correlation (investigate if plan names appear in session data)
+### Features
+- [ ] Plans correlation (detect plan references in session data)
 - [ ] Skills linking (detect skill invocations in sessions)
-- [ ] Search/filter functionality
+- [ ] Search/filter across sessions
 - [ ] Session comparison view
+- [ ] Project folders UI (group projects into named folders)
+
+### Maintenance
+- [ ] Validate API spec against `docs/api-spec.yaml`
+- [ ] Sync TypeScript types with Pydantic models

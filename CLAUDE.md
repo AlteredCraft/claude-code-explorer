@@ -80,11 +80,6 @@ The standalone Python FastAPI server:
 
 OpenAPI specification is auto-generated from Pydantic models at `/api/v1/openapi.json`
 
-### Legacy TypeScript API (`/api`)
-
-The original Express.js API is still available for reference:
-- Run with `npm run dev:api:ts` or `npm run start:api:ts`
-
 ### Client Libraries
 
 - `lib/api-client.ts` - Typed fetch wrapper for consuming the REST API
@@ -147,3 +142,32 @@ uv run python scripts/validate_openapi.py
 ```
 
 The script compares paths, methods, and schemas between the specs.
+
+## Path Encoding
+
+Claude Code stores project data in `~/.claude/projects/{encoded_path}/`. The encoding replaces **all non-alphanumeric characters** with `-`:
+
+```python
+re.sub(r"[^a-zA-Z0-9]", "-", path)
+```
+
+Examples:
+| Real Path | Encoded Directory |
+|-----------|-------------------|
+| `/Users/sam/Projects/foo` | `-Users-sam-Projects-foo` |
+| `/Users/sam/_PRIMARY_VAULT` | `-Users-sam--PRIMARY-VAULT` |
+
+**Important**: This encoding is lossy - `/`, `.`, `_`, `-` all become `-`. The `~/.claude.json` config file contains real paths as keys and is the authoritative source for decoding.
+
+## Testing
+
+```bash
+# Verify path encoding
+python3 -c "import re; print(re.sub(r'[^a-zA-Z0-9]', '-', '/Users/sam/Projects/foo'))"
+
+# Test API endpoints
+curl http://localhost:3001/api/v1/projects/ | jq '.data[] | {name, path, sessionCount}'
+
+# Check OpenAPI spec
+curl http://localhost:3001/api/v1/openapi.json | jq '.paths | keys'
+```
