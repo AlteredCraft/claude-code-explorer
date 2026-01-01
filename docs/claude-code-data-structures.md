@@ -321,13 +321,46 @@ file-history/
 
 **File Naming**: `{contentHash}@v{versionNumber}`
 
+| Component | Description |
+|-----------|-------------|
+| `contentHash` | 16-character hex hash of file content (e.g., `59e0b9c43163e850`) |
+| `versionNumber` | Sequential version within session (1, 2, 3...) |
+
 **Content**: Raw file content at that version
 
 **Correlation**:
 - Directory name = `sessionId` from session transcript
 - `backupFileName` in `file-history-snapshot` messages points to these files
 
-**Dev Journal Use**: Reconstruct file changes, generate diffs, understand what was modified.
+#### `backupFileName` Field Behavior
+
+The `backupFileName` field in `trackedFileBackups` entries can be:
+
+| Value | When it occurs | Meaning |
+|-------|---------------|---------|
+| `"hash@v1"` | Editing existing files | Backup file exists in `file-history/{sessionId}/` |
+| `null` | **Newly created files** (common at v1) | No previous content to back up |
+| `null` | Edge cases (rare, any version) | Backup creation failed or was skipped |
+
+**Example**: When Claude creates a new file, the first snapshot has `backupFileName: null`:
+```json
+{
+  "trackedFileBackups": {
+    "new-file.md": {
+      "backupFileName": null,   // No backup - file didn't exist before
+      "version": 1,
+      "backupTime": "2025-12-11T15:50:50.185Z"
+    },
+    "existing-file.md": {
+      "backupFileName": "fe8c3c23062c0e71@v1",  // Backup of original content
+      "version": 1,
+      "backupTime": "2025-12-11T15:52:13.999Z"
+    }
+  }
+}
+```
+
+**Dev Journal Use**: Reconstruct file changes, generate diffs, understand what was modified. Entries with `backupFileName: null` indicate file creation rather than modification.
 
 ---
 

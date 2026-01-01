@@ -102,7 +102,9 @@ async def find_session_file_history(session_id: str) -> list[dict]:
                 timestamp = snapshot.get("timestamp")
 
                 for file_path, backup in tracked_backups.items():
-                    backup_file_name = backup.get("backupFileName", "")
+                    backup_file_name = backup.get("backupFileName") or ""
+                    if not backup_file_name:
+                        continue  # Skip entries without valid backup filename
                     key = f"{file_path}:{backup_file_name}"
 
                     if key not in seen_backups:

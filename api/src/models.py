@@ -107,7 +107,8 @@ class Session(BaseModel):
         alias="projectPath",
         description="Absolute filesystem path to the project this session belongs to"
     )
-    start_time: str = Field(
+    start_time: str | None = Field(
+        None,
         alias="startTime",
         description="ISO 8601 timestamp of first message in the session"
     )
