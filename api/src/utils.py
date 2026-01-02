@@ -3,7 +3,7 @@
 import json
 import re
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -122,7 +122,7 @@ def parse_timestamp(timestamp: str | int | float | None) -> datetime | None:
         # Unix timestamp in milliseconds
         if timestamp > 1e12:
             timestamp = timestamp / 1000
-        return datetime.fromtimestamp(timestamp)
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc)
 
     if isinstance(timestamp, str):
         try:
@@ -135,7 +135,7 @@ def parse_timestamp(timestamp: str | int | float | None) -> datetime | None:
             ts = float(timestamp)
             if ts > 1e12:
                 ts = ts / 1000
-            return datetime.fromtimestamp(ts)
+            return datetime.fromtimestamp(ts, tz=timezone.utc)
         except ValueError:
             pass
 

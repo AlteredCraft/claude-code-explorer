@@ -6,7 +6,7 @@ filesystem path with sessions stored as JSONL transcripts.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 from urllib.parse import unquote
@@ -432,6 +432,18 @@ async def list_sessions(
         "all",
         description="Filter by session type: 'regular' (main sessions), 'agent' (sub-agents), or 'all' (default)"
     ),
+    start_date: str | None = Query(
+        None,
+        alias="startDate",
+        description="Filter to sessions starting on or after this date. Format: YYYY-MM-DD. Use with endDate to query a specific date range instead of fetching all sessions.",
+        pattern=r"^\d{4}-\d{2}-\d{2}$"
+    ),
+    end_date: str | None = Query(
+        None,
+        alias="endDate",
+        description="Filter to sessions starting on or before this date (inclusive). Format: YYYY-MM-DD. Use with startDate to query a specific date range.",
+        pattern=r"^\d{4}-\d{2}-\d{2}$"
+    ),
     sort_by: str = Query(
         "startTime",
         alias="sortBy",
@@ -491,6 +503,23 @@ async def list_sessions(
         sessions = [s for s in sessions if not s["isAgent"]]
     elif type == "agent":
         sessions = [s for s in sessions if s["isAgent"]]
+
+    # Filter by date range
+    if start_date:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        sessions = [
+            s for s in sessions
+            if s["startTime"] and datetime.fromisoformat(s["startTime"]) >= start_dt
+        ]
+    if end_date:
+        # End of day for end_date (inclusive)
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(
+            hour=23, minute=59, second=59, tzinfo=timezone.utc
+        )
+        sessions = [
+            s for s in sessions
+            if s["startTime"] and datetime.fromisoformat(s["startTime"]) <= end_dt
+        ]
 
     # Paginate
     total = len(sessions)
@@ -644,6 +673,10 @@ async def list_messages(
         "all",
         description="Filter by message type: 'user', 'assistant', or 'all' (default)"
     ),
+    flatten: bool = Query(
+        False,
+        description="When true, extract and return content as plain text instead of nested {role, content} objects. Simplifies parsing - no need for complex jq gymnastics to extract actual user text. For assistant messages, extracts text from all text blocks."
+    ),
     limit: int = Query(
         50,
         le=100,
@@ -678,6 +711,25 @@ async def list_messages(
         messages = [m for m in messages if m["type"] == "user"]
     elif type == "assistant":
         messages = [m for m in messages if m["type"] == "assistant"]
+
+    # Flatten content if requested - keeps role but flattens inner content to string
+    if flatten:
+        for msg in messages:
+            content = msg.get("content", {})
+            if isinstance(content, dict):
+                role = content.get("role", msg.get("type", ""))
+                inner = content.get("content", "")
+                if isinstance(inner, str):
+                    # User messages typically have string content - already flat
+                    msg["content"] = {"role": role, "content": inner}
+                elif isinstance(inner, list):
+                    # Assistant messages have array of blocks - extract text
+                    text_parts = []
+                    for block in inner:
+                        if isinstance(block, dict):
+                            if block.get("type") == "text" and block.get("text"):
+                                text_parts.append(block["text"])
+                    msg["content"] = {"role": role, "content": "\n\n".join(text_parts)}
 
     # Paginate
     total = len(messages)
@@ -892,13 +944,13 @@ async def get_activity(
 
     # Group by day
     from datetime import timedelta
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=days)
 
     daily_map: dict[str, dict] = {}
 
     for session in sessions:
-        if session["startTime"] < cutoff:
+        if not session["startTime"] or session["startTime"] < cutoff:
             continue
 
         date_str = session["startTime"].strftime("%Y-%m-%d")

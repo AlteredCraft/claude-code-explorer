@@ -5,6 +5,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .routes.activity import router as global_activity_router
 from .routes.commands import router as commands_router
 from .routes.config import router as config_router
 from .routes.correlated import router as correlated_router
@@ -50,6 +51,7 @@ app.include_router(sessions_router, prefix=API_PREFIX)
 app.include_router(messages_router, prefix=API_PREFIX)
 app.include_router(sub_agents_router, prefix=API_PREFIX)
 app.include_router(activity_router, prefix=API_PREFIX)
+app.include_router(global_activity_router, prefix=API_PREFIX)
 app.include_router(correlated_router, prefix=API_PREFIX)
 app.include_router(plans_router, prefix=API_PREFIX)
 app.include_router(skills_router, prefix=API_PREFIX)

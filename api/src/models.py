@@ -391,6 +391,100 @@ class ActivityResponse(BaseModel):
     summary: ActivitySummaryStats = Field(description="Aggregate statistics for the period")
 
 
+# Global Activity (cross-project)
+class GlobalSession(Session):
+    """Session with project information for cross-project views."""
+    project_id: str = Field(
+        alias="projectId",
+        description="Project identifier for API routing"
+    )
+    project_name: str = Field(
+        alias="projectName",
+        description="Project directory name"
+    )
+
+
+class GlobalDailyActivity(BaseModel):
+    """Activity summary for a single day across all projects."""
+    date: str = Field(description="Date in YYYY-MM-DD format")
+    sessions: list[GlobalSession] = Field(
+        description="Sessions active on this date across all projects"
+    )
+    total_messages: int = Field(
+        alias="totalMessages",
+        description="Sum of message counts across all sessions on this date"
+    )
+    session_count: int = Field(
+        alias="sessionCount",
+        description="Number of sessions on this date"
+    )
+
+    class Config:
+        populate_by_name = True
+
+
+class GlobalActivityResponse(BaseModel):
+    """Response for cross-project activity timeline endpoint."""
+    data: list[GlobalDailyActivity] = Field(
+        description="Daily activity entries sorted by date descending"
+    )
+    summary: ActivitySummaryStats = Field(description="Aggregate statistics for the period")
+
+
+class DateRange(BaseModel):
+    """Date range for activity queries."""
+    start: str = Field(description="Start date in YYYY-MM-DD format")
+    end: str = Field(description="End date in YYYY-MM-DD format")
+
+
+class ProjectBreakdown(BaseModel):
+    """Activity breakdown for a single project."""
+    project: str = Field(description="Project name")
+    project_id: str = Field(
+        alias="projectId",
+        description="Project identifier for API routing"
+    )
+    sessions: int = Field(description="Number of sessions in this project")
+    messages: int = Field(description="Total messages in this project")
+
+    class Config:
+        populate_by_name = True
+
+
+class DailyBreakdown(BaseModel):
+    """Activity breakdown for a single day."""
+    date: str = Field(description="Date in YYYY-MM-DD format")
+    sessions: int = Field(description="Number of sessions on this date")
+    messages: int = Field(description="Total messages on this date")
+
+
+class GlobalActivitySummary(BaseModel):
+    """Aggregated activity summary across all projects."""
+    date_range: DateRange = Field(
+        alias="dateRange",
+        description="The date range for this summary"
+    )
+    total_sessions: int = Field(
+        alias="totalSessions",
+        description="Total sessions across all projects"
+    )
+    total_messages: int = Field(
+        alias="totalMessages",
+        description="Total messages across all projects"
+    )
+    project_breakdown: list[ProjectBreakdown] = Field(
+        alias="projectBreakdown",
+        description="Activity breakdown by project"
+    )
+    daily_breakdown: list[DailyBreakdown] = Field(
+        alias="dailyBreakdown",
+        description="Activity breakdown by date"
+    )
+
+    class Config:
+        populate_by_name = True
+
+
 # Sub-agents
 class SubAgentResponse(BaseModel):
     """Sub-agent relationship information for a session."""
