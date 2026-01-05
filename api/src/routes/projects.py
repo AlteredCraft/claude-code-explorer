@@ -40,6 +40,7 @@ from ..utils import (
     get_claude_config,
     get_claude_dir,
     get_display_path,
+    get_parent_session_id,
     get_project_name,
     normalize_path_prefix,
     parse_jsonl_file,
@@ -336,21 +337,47 @@ async def get_project(
     if session_files:
         last_activity = session_files[0]["mtime"].isoformat()
 
+    # Get project directory for relationship lookups
+    claude_dir = get_claude_dir()
+    project_dir = claude_dir / "projects" / project_id_unquoted
+
     # Get recent sessions with details
     recent_sessions = []
+    agent_sessions = []
     for file in session_files[:10]:
         session_id = file["name"].replace(".jsonl", "")
         bounds = await get_session_bounds(project_id_unquoted, file["name"])
+        is_sub_agent = session_id.startswith("agent-")
 
-        recent_sessions.append({
+        session = {
             "id": session_id,
             "projectPath": decoded_path,
             "startTime": bounds["start_time"].isoformat() if bounds["start_time"] else None,
             "endTime": bounds["end_time"].isoformat() if bounds["end_time"] else None,
             "messageCount": bounds["message_count"],
             "model": bounds.get("model"),
-            "isAgent": session_id.startswith("agent-"),
-        })
+            "isSubAgent": is_sub_agent,
+            "parentSessionId": None,
+            "subAgentIds": None,
+        }
+        recent_sessions.append(session)
+        if is_sub_agent:
+            agent_sessions.append(session)
+
+    # Populate parent-child relationships for recent sessions
+    from collections import defaultdict
+    parent_to_agents: dict[str, list[str]] = defaultdict(list)
+
+    for agent in agent_sessions:
+        parent_id = get_parent_session_id(project_dir, agent["id"])
+        agent["parentSessionId"] = parent_id
+        if parent_id:
+            parent_to_agents[parent_id].append(agent["id"])
+
+    for session in recent_sessions:
+        if not session["isSubAgent"]:
+            agent_ids = parent_to_agents.get(session["id"], [])
+            session["subAgentIds"] = agent_ids if agent_ids else None
 
     # Calculate activity summary
     total_messages = 0
@@ -470,9 +497,6 @@ async def list_sessions(
     Returns session transcripts for this project. Each .jsonl file
     represents one session (main or sub-agent).
 
-    Sub-agent sessions have filenames starting with 'agent-' and are
-    spawned via the Task tool during main sessions.
-
     Returns:
         data: List of Session objects with id, timestamps, message count
         meta: Pagination metadata
@@ -483,26 +507,53 @@ async def list_sessions(
     decoded_path = path_lookup.get(project_id_unquoted) or decode_project_path(project_id_unquoted)
     session_files = await get_session_files(project_id_unquoted)
 
+    # Get project directory for relationship lookups
+    claude_dir = get_claude_dir()
+    project_dir = claude_dir / "projects" / project_id_unquoted
+
     sessions = []
+    agent_sessions = []
     for file in session_files:
         session_id = file["name"].replace(".jsonl", "")
         bounds = await get_session_bounds(project_id_unquoted, file["name"])
+        is_sub_agent = session_id.startswith("agent-")
 
-        sessions.append({
+        session = {
             "id": session_id,
             "projectPath": decoded_path,
             "startTime": bounds["start_time"].isoformat() if bounds["start_time"] else None,
             "endTime": bounds["end_time"].isoformat() if bounds["end_time"] else None,
             "messageCount": bounds["message_count"],
             "model": bounds.get("model"),
-            "isAgent": session_id.startswith("agent-"),
-        })
+            "isSubAgent": is_sub_agent,
+            "parentSessionId": None,
+            "subAgentIds": None,
+        }
+        sessions.append(session)
+        if is_sub_agent:
+            agent_sessions.append(session)
+
+    # Populate parent-child relationships
+    from collections import defaultdict
+    parent_to_agents: dict[str, list[str]] = defaultdict(list)
+
+    for agent in agent_sessions:
+        parent_id = get_parent_session_id(project_dir, agent["id"])
+        agent["parentSessionId"] = parent_id
+        if parent_id:
+            parent_to_agents[parent_id].append(agent["id"])
+
+    # Populate subAgentIds on parent sessions
+    for session in sessions:
+        if not session["isSubAgent"]:
+            agent_ids = parent_to_agents.get(session["id"], [])
+            session["subAgentIds"] = agent_ids if agent_ids else None
 
     # Filter by type
     if type == "regular":
-        sessions = [s for s in sessions if not s["isAgent"]]
+        sessions = [s for s in sessions if not s["isSubAgent"]]
     elif type == "agent":
-        sessions = [s for s in sessions if s["isAgent"]]
+        sessions = [s for s in sessions if s["isSubAgent"]]
 
     # Filter by date range
     if start_date:
@@ -586,6 +637,26 @@ async def get_session(
         start = bounds["start_time"].replace(tzinfo=None) if bounds["start_time"].tzinfo else bounds["start_time"]
         duration = (end - start).total_seconds() * 1000
 
+    # Get parent-child relationships
+    project_dir = claude_dir / "projects" / project_id_unquoted
+    is_sub_agent = session_id.startswith("agent-")
+    parent_session_id = None
+    sub_agent_ids = None
+
+    if is_sub_agent:
+        parent_session_id = get_parent_session_id(project_dir, session_id)
+    else:
+        # Find all agents that reference this session as parent
+        from collections import defaultdict
+        sub_agent_ids = []
+        for agent_file in project_dir.glob("agent-*.jsonl"):
+            agent_id = agent_file.stem
+            parent_id = get_parent_session_id(project_dir, agent_id)
+            if parent_id == session_id:
+                sub_agent_ids.append(agent_id)
+        if not sub_agent_ids:
+            sub_agent_ids = None
+
     return {
         "id": session_id,
         "projectPath": decoded_path,
@@ -593,7 +664,9 @@ async def get_session(
         "endTime": bounds["end_time"].isoformat() if bounds["end_time"] else None,
         "messageCount": bounds["message_count"],
         "model": bounds.get("model"),
-        "isAgent": session_id.startswith("agent-"),
+        "isSubAgent": is_sub_agent,
+        "parentSessionId": parent_session_id,
+        "subAgentIds": sub_agent_ids,
         "duration": duration,
         "metadata": metadata,
         "correlatedData": correlated,
@@ -921,26 +994,52 @@ async def get_activity(
     session_files = await get_session_files(project_id_unquoted)
 
     # Get all sessions with their start times
+    claude_dir = get_claude_dir()
+    project_dir = claude_dir / "projects" / project_id_unquoted
+
     sessions = []
+    agent_sessions = []
     for file in session_files:
         session_id = file["name"].replace(".jsonl", "")
         bounds = await get_session_bounds(project_id_unquoted, file["name"])
+        is_sub_agent = session_id.startswith("agent-")
 
-        sessions.append({
+        session = {
             "id": session_id,
             "projectPath": decoded_path,
             "startTime": bounds["start_time"],
             "endTime": bounds["end_time"],
             "messageCount": bounds["message_count"],
             "model": bounds.get("model"),
-            "isAgent": session_id.startswith("agent-"),
-        })
+            "isSubAgent": is_sub_agent,
+            "parentSessionId": None,
+            "subAgentIds": None,
+        }
+        sessions.append(session)
+        if is_sub_agent:
+            agent_sessions.append(session)
+
+    # Populate parent-child relationships
+    from collections import defaultdict
+    parent_to_agents: dict[str, list[str]] = defaultdict(list)
+
+    for agent in agent_sessions:
+        parent_id = get_parent_session_id(project_dir, agent["id"])
+        agent["parentSessionId"] = parent_id
+        if parent_id:
+            parent_to_agents[parent_id].append(agent["id"])
+
+    # Populate subAgentIds on parent sessions
+    for session in sessions:
+        if not session["isSubAgent"]:
+            agent_ids = parent_to_agents.get(session["id"], [])
+            session["subAgentIds"] = agent_ids if agent_ids else None
 
     # Filter by type
     if type == "regular":
-        sessions = [s for s in sessions if not s["isAgent"]]
+        sessions = [s for s in sessions if not s["isSubAgent"]]
     elif type == "agent":
-        sessions = [s for s in sessions if s["isAgent"]]
+        sessions = [s for s in sessions if s["isSubAgent"]]
 
     # Group by day
     from datetime import timedelta

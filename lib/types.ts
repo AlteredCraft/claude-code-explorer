@@ -19,9 +19,9 @@ export interface Session {
   endTime?: Date;
   messageCount: number;
   model?: string;
-  isAgent: boolean;
+  isSubAgent: boolean;
   parentSessionId?: string | null;
-  subAgentIds?: string[];
+  subAgentIds?: string[] | null;
 }
 
 export interface Message {

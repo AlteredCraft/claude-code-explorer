@@ -5,6 +5,7 @@ description = "REST API for exploring ~/.claude/ session data and metadata"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "fast-llms-txt>=0.2.0",
     "fastapi>=0.128.0",
     "pydantic>=2.12.5",
     "python-multipart>=0.0.21",

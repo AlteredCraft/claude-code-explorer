@@ -46,9 +46,9 @@ export default async function ProjectPage({ params }: PageProps) {
   const response = await getProjectSessions(projectId);
   const sessions = response.data;
 
-  // Separate regular sessions from agent sessions
-  const regularSessions = sessions.filter(s => !s.isAgent);
-  const agentSessions = sessions.filter(s => s.isAgent);
+  // Separate regular sessions from sub-agent sessions
+  const regularSessions = sessions.filter(s => !s.isSubAgent);
+  const agentSessions = sessions.filter(s => s.isSubAgent);
 
   // Convert string dates to Date objects for the ActivityTimeline component
   const sessionsForTimeline = regularSessions.map(s => ({

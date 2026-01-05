@@ -4,6 +4,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fast_llms_txt import create_llms_txt_router
 
 from .routes.activity import router as global_activity_router
 from .routes.commands import router as commands_router
@@ -62,6 +63,7 @@ app.include_router(stats_router, prefix=API_PREFIX)
 app.include_router(history_router, prefix=API_PREFIX)
 app.include_router(files_router, prefix=API_PREFIX)
 app.include_router(config_router, prefix=API_PREFIX)
+app.include_router(create_llms_txt_router(app), prefix="/docs")
 
 
 @app.get("/health")

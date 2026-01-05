@@ -1073,7 +1073,7 @@ components:
         - projectPath
         - startTime
         - messageCount
-        - isAgent
+        - isSubAgent
       properties:
         id:
           type: string
@@ -1095,9 +1095,9 @@ components:
           type: string
           description: Model used (e.g., claude-3-5-sonnet-20240620)
           example: 'claude-opus-4-5-20251101'
-        isAgent:
+        isSubAgent:
           type: boolean
-          description: True if session ID starts with 'agent-'
+          description: True if this is a sub-agent session (session ID starts with 'agent-')
         parentSessionId:
           type: string
           nullable: true

@@ -7,16 +7,17 @@ prompts across projects without full conversation context.
 from fastapi import APIRouter, Query
 
 from ..models import HistoryResponse
-from ..utils import encode_project_path, get_claude_dir, parse_jsonl_file
+from ..utils import build_path_lookup, encode_project_path, get_claude_config, get_claude_dir, parse_jsonl_file
 
 router = APIRouter(prefix="/history", tags=["history"])
 
 
 @router.get("/", response_model=HistoryResponse)
 async def get_history(
-    project: str | None = Query(
+    project_id: str | None = Query(
         None,
-        description="Filter to prompts from projects containing this path substring"
+        alias="projectId",
+        description="Filter to prompts from this project (encoded project ID)"
     ),
     start_date: str | None = Query(
         None,
@@ -46,8 +47,7 @@ async def get_history(
     """Get prompt history across all sessions.
 
     Returns history entries sorted by timestamp descending (most recent
-    first). Each entry contains the prompt text, timestamp, project path,
-    and any pasted content.
+    first). These are the User prompts ONLY. The assistant responses are not listed
 
     This provides a quick activity timeline without loading full
     session transcripts.
@@ -70,8 +70,14 @@ async def get_history(
         entries = parse_jsonl_file(content)
 
         # Apply filters
-        if project:
-            entries = [e for e in entries if project in e.get("project", "")]
+        if project_id:
+            config = await get_claude_config()
+            path_lookup = build_path_lookup(config)
+            real_path = path_lookup.get(project_id)
+            if real_path:
+                entries = [e for e in entries if e.get("project") == real_path]
+            else:
+                entries = []
 
         if search:
             query = search.lower()
@@ -101,6 +107,7 @@ async def get_history(
             transformed.append({
                 "display": entry.get("display", ""),
                 "timestamp": entry.get("timestamp", 0),
+                "sessionId": entry.get("sessionId"),
                 "projectPath": project,
                 "projectId": encode_project_path(project) if project else None,
                 "pastedContents": entry.get("pastedContents"),

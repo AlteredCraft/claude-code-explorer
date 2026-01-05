@@ -106,7 +106,7 @@ export async function getProjectSessions(encodedProjectPath: string): Promise<Se
   const sessions: Session[] = await Promise.all(
     sessionFiles.map(async (file) => {
       const sessionId = file.name.replace('.jsonl', '');
-      const isAgent = sessionId.startsWith('agent-');
+      const isSubAgent = sessionId.startsWith('agent-');
 
       // Read first and last lines to get time bounds and message count
       const { startTime, endTime, messageCount, model } = await getSessionBounds(
@@ -121,7 +121,7 @@ export async function getProjectSessions(encodedProjectPath: string): Promise<Se
         endTime,
         messageCount,
         model,
-        isAgent,
+        isSubAgent,
       };
     })
   );

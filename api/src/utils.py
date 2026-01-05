@@ -172,3 +172,29 @@ def parse_shell_snapshot_filename(filename: str) -> dict[str, Any]:
             "timestamp": int(match.group(2)),
         }
     return {"filename": filename}
+
+
+def get_parent_session_id(project_dir: Path, agent_session_id: str) -> str | None:
+    """Read first message from agent JSONL to get parent sessionId.
+
+    Sub-agent session files contain a sessionId field in each message
+    that points to the parent session UUID.
+
+    Args:
+        project_dir: Path to the project directory containing session files
+        agent_session_id: The agent session ID (e.g., "agent-a8ced59")
+
+    Returns:
+        The parent session UUID, or None if not found
+    """
+    agent_path = project_dir / f"{agent_session_id}.jsonl"
+    if not agent_path.exists():
+        return None
+    try:
+        content = agent_path.read_text()
+        lines = parse_jsonl_file(content)
+        if lines:
+            return lines[0].get("sessionId")
+    except Exception:
+        pass
+    return None

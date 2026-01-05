@@ -125,8 +125,8 @@ class Session(BaseModel):
         None,
         description="Claude model used (e.g., claude-opus-4-5-20251101)"
     )
-    is_agent: bool = Field(
-        alias="isAgent",
+    is_sub_agent: bool = Field(
+        alias="isSubAgent",
         description="True if sub-agent session spawned by Task tool"
     )
     parent_session_id: str | None = Field(
@@ -772,6 +772,11 @@ class HistoryEntry(BaseModel):
         None,
         alias="projectId",
         description="Encoded project path for URL routing (e.g., '-Users-sam-Projects-foo')"
+    )
+    session_id: str | None = Field(
+        None,
+        alias="sessionId",
+        description="Session UUID where prompt was entered"
     )
     pasted_contents: dict[str, Any] | None = Field(
         None,

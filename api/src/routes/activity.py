@@ -24,6 +24,7 @@ from ..utils import (
     encode_project_path,
     get_claude_config,
     get_claude_dir,
+    get_parent_session_id,
     get_project_name,
     parse_timestamp,
 )
@@ -98,6 +99,8 @@ async def get_global_activity(
         project_name = get_project_name(real_path) if real_path else project_id
 
         session_files = await get_session_files(project_id)
+        project_sessions = []
+        project_agent_sessions = []
 
         for file in session_files:
             session_id = file["name"].replace(".jsonl", "")
@@ -110,15 +113,15 @@ async def get_global_activity(
             if bounds["start_time"] < start_dt or bounds["start_time"] > end_dt:
                 continue
 
-            is_agent = session_id.startswith("agent-")
+            is_sub_agent = session_id.startswith("agent-")
 
             # Filter by type
-            if type == "regular" and is_agent:
+            if type == "regular" and is_sub_agent:
                 continue
-            if type == "agent" and not is_agent:
+            if type == "agent" and not is_sub_agent:
                 continue
 
-            all_sessions.append({
+            session = {
                 "id": session_id,
                 "projectPath": real_path or project_id,
                 "projectId": project_id,
@@ -127,8 +130,30 @@ async def get_global_activity(
                 "endTime": bounds["end_time"],
                 "messageCount": bounds["message_count"],
                 "model": bounds.get("model"),
-                "isAgent": is_agent,
-            })
+                "isSubAgent": is_sub_agent,
+                "parentSessionId": None,
+                "subAgentIds": None,
+            }
+            project_sessions.append(session)
+            if is_sub_agent:
+                project_agent_sessions.append(session)
+
+        # Populate parent-child relationships for this project
+        from collections import defaultdict
+        parent_to_agents: dict[str, list[str]] = defaultdict(list)
+
+        for agent in project_agent_sessions:
+            parent_id = get_parent_session_id(project_dir, agent["id"])
+            agent["parentSessionId"] = parent_id
+            if parent_id:
+                parent_to_agents[parent_id].append(agent["id"])
+
+        for session in project_sessions:
+            if not session["isSubAgent"]:
+                agent_ids = parent_to_agents.get(session["id"], [])
+                session["subAgentIds"] = agent_ids if agent_ids else None
+
+        all_sessions.extend(project_sessions)
 
     # Group by day
     daily_map: dict[str, dict] = {}
@@ -253,12 +278,12 @@ async def get_activity_summary(
             if bounds["start_time"] < start_dt or bounds["start_time"] > end_dt:
                 continue
 
-            is_agent = session_id.startswith("agent-")
+            is_sub_agent = session_id.startswith("agent-")
 
             # Filter by type
-            if type == "regular" and is_agent:
+            if type == "regular" and is_sub_agent:
                 continue
-            if type == "agent" and not is_agent:
+            if type == "agent" and not is_sub_agent:
                 continue
 
             msg_count = bounds["message_count"]

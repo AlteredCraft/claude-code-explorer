@@ -18,7 +18,7 @@ from ..models import (
     FileHistoryEntry,
     TodoItem,
 )
-from ..utils import get_claude_dir, parse_jsonl_file
+from ..utils import get_claude_dir, get_parent_session_id, parse_jsonl_file
 
 router = APIRouter(prefix="/sessions", tags=["correlated"])
 
@@ -236,18 +236,8 @@ async def find_sub_agent_sessions(
     decoded_path = "/" + project_dir.name.replace("-", "/")
 
     if is_agent_session:
-        # For agent sessions, read the first message to get the parent sessionId
-        agent_path = project_dir / f"{session_id}.jsonl"
-        if agent_path.exists():
-            try:
-                content = agent_path.read_text()
-                lines = parse_jsonl_file(content)
-                if lines:
-                    first_msg = lines[0]
-                    # The sessionId field in agent messages points to the parent
-                    parent_session_id = first_msg.get("sessionId")
-            except Exception:
-                pass
+        # For agent sessions, use shared helper to get parent sessionId
+        parent_session_id = get_parent_session_id(project_dir, session_id)
     else:
         # For main sessions, find all agent files that reference this session
         agent_files = [f for f in project_dir.iterdir()
@@ -294,8 +284,9 @@ async def find_sub_agent_sessions(
                     "endTime": end_time,
                     "messageCount": message_count,
                     "model": model,
-                    "isAgent": True,
+                    "isSubAgent": True,
                     "parentSessionId": session_id,
+                    "subAgentIds": None,
                 })
             except Exception:
                 continue
