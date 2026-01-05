@@ -13,9 +13,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi import Path as PathParam
 
 from ..models import (
-    CorrelatedData,
     FileBackupContent,
-    FileHistoryEntry,
+    FilesChangedResponse,
     TodoItem,
 )
 from ..utils import get_claude_dir, get_parent_session_id, parse_jsonl_file
@@ -102,17 +101,17 @@ async def find_session_file_history(session_id: str) -> list[dict]:
                 timestamp = snapshot.get("timestamp")
 
                 for file_path, backup in tracked_backups.items():
-                    backup_file_name = backup.get("backupFileName") or ""
-                    if not backup_file_name:
-                        continue  # Skip entries without valid backup filename
-                    key = f"{file_path}:{backup_file_name}"
+                    backup_file_name = backup.get("backupFileName")  # Can be None for created files
+                    version = backup.get("version", 1)
+                    # Include version in key to track multiple versions of same file
+                    key = f"{file_path}:{backup_file_name or 'null'}:{version}"
 
                     if key not in seen_backups:
                         seen_backups.add(key)
                         entries.append({
                             "filePath": file_path,
-                            "backupFileName": backup_file_name,
-                            "version": backup.get("version", 1),
+                            "backupFileName": backup_file_name,  # None for newly created files
+                            "version": version,
                             "backupTime": backup.get("backupTime") or timestamp,
                             "messageId": message_id,
                         })
@@ -316,27 +315,77 @@ async def get_todos(
     return {"data": todos}
 
 
-@router.get("/{session_id}/file-history")
-async def get_file_history(
+@router.get("/{session_id}/files-changed")
+async def get_files_changed(
     session_id: str = PathParam(
-        description="Session UUID to retrieve file history for"
+        description="Session UUID to retrieve file changes for"
     )
-) -> dict[str, list[FileHistoryEntry]]:
-    """Get file history for a session.
+) -> FilesChangedResponse:
+    """Get files created or modified during a session.
 
-    Returns file backups from two sources:
-    1. file-history-snapshot messages in the session transcript
-    2. Backup files in the session's file history directory
-
-    Backup files use format {contentHash}@v{version} where:
-    - contentHash: Hash of file content at backup time
-    - version: Sequential version number within the session
+    Derives file change type from backupFileName:
+    - null at v1 = file was created (didn't exist before)
+    - present at v1 = file was modified (had prior content)
 
     Returns:
-        data: List of FileHistoryEntry objects sorted by filePath and version
+        FilesChangedResponse with summary counts and per-file details
     """
     file_history = await find_session_file_history(session_id)
-    return {"data": file_history}
+
+    # Group entries by file path
+    files_by_path: dict[str, list[dict]] = {}
+    for entry in file_history:
+        path = entry["filePath"]
+        if path not in files_by_path:
+            files_by_path[path] = []
+        files_by_path[path].append(entry)
+
+    files = []
+    created_count = 0
+    modified_count = 0
+
+    for path, entries in files_by_path.items():
+        # Sort by version to find v1
+        sorted_entries = sorted(entries, key=lambda e: e.get("version", 0))
+        v1 = sorted_entries[0] if sorted_entries else None
+
+        # Created if v1 has no backupFileName (file didn't exist before)
+        is_created = v1 is not None and v1.get("backupFileName") is None
+        action = "created" if is_created else "modified"
+
+        if is_created:
+            created_count += 1
+        else:
+            modified_count += 1
+
+        # Build backups array for content retrieval
+        backups = [
+            {
+                "backupFileName": e.get("backupFileName"),
+                "version": e.get("version", 0),
+                "backupTime": e.get("backupTime"),
+            }
+            for e in sorted_entries
+        ]
+
+        files.append({
+            "path": path,
+            "action": action,
+            "backups": backups,
+        })
+
+    # Sort files by path for consistent output
+    files.sort(key=lambda f: f["path"])
+
+    return {
+        "sessionId": session_id,
+        "summary": {
+            "created": created_count,
+            "modified": modified_count,
+            "totalFiles": len(files),
+        },
+        "files": files,
+    }
 
 
 @router.get("/{session_id}/file-history/{backup_file_name}")

@@ -24,17 +24,31 @@ interface SessionMetadata {
   model?: string;
 }
 
-interface FileHistoryEntry {
-  filePath: string;
-  backupFileName: string;
+interface FileBackup {
+  backupFileName: string | null;
   version: number;
   backupTime?: string;
-  messageId?: string;
+}
+
+interface FileChange {
+  path: string;
+  action: 'created' | 'modified';
+  backups: FileBackup[];
+}
+
+interface FilesChangedResponse {
+  sessionId: string;
+  summary: {
+    created: number;
+    modified: number;
+    totalFiles: number;
+  };
+  files: FileChange[];
 }
 
 interface CorrelatedData {
   todos: { content: string; status: string }[];
-  fileHistory: FileHistoryEntry[];
+  filesChanged: FilesChangedResponse | null;
   debugLogs: string[];
   linkedPlan?: string;
   linkedSkill?: string;
@@ -182,35 +196,38 @@ export function SessionTabs({ messages, metadata, correlatedData, sessionId }: S
                 </AccordionContent>
               </AccordionItem>
 
-              {/* File History */}
+              {/* Files Changed */}
               <AccordionItem value="files">
                 <AccordionTrigger>
                   <div className="flex items-center gap-2">
-                    <span>File History</span>
-                    <Badge variant="secondary">{correlatedData.fileHistory.length}</Badge>
+                    <span>Files Changed</span>
+                    {correlatedData.filesChanged && (
+                      <div className="flex items-center gap-1">
+                        <Badge variant="secondary">{correlatedData.filesChanged.summary.totalFiles}</Badge>
+                        {correlatedData.filesChanged.summary.created > 0 && (
+                          <Badge variant="default" className="bg-green-600 text-xs">
+                            +{correlatedData.filesChanged.summary.created}
+                          </Badge>
+                        )}
+                        {correlatedData.filesChanged.summary.modified > 0 && (
+                          <Badge variant="outline" className="text-xs">
+                            ~{correlatedData.filesChanged.summary.modified}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
                   <SourcePath path={`~/.claude/file-history/${sessionId}/`} className="mb-2" />
-                  {correlatedData.fileHistory.length > 0 ? (
-                    <div className="space-y-1">
-                      {correlatedData.fileHistory.map((entry, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-zinc-900 font-mono text-sm"
-                        >
-                          <div className="flex flex-col min-w-0">
-                            <span className="truncate">{entry.filePath}</span>
-                            <span className="text-xs text-zinc-500 truncate">{entry.backupFileName}</span>
-                          </div>
-                          <Badge variant="outline" className="text-xs shrink-0 ml-2">
-                            v{entry.version}
-                          </Badge>
-                        </div>
+                  {correlatedData.filesChanged && correlatedData.filesChanged.files.length > 0 ? (
+                    <div className="space-y-2">
+                      {correlatedData.filesChanged.files.map((file, idx) => (
+                        <FileChangeItem key={idx} file={file} />
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-zinc-500">No file history found for this session</p>
+                    <p className="text-sm text-zinc-500">No files changed in this session</p>
                   )}
                 </AccordionContent>
               </AccordionItem>
@@ -418,6 +435,61 @@ function ToolResultBlock({ block }: { block: ContentBlock }) {
         <pre className="mt-2 text-xs bg-zinc-900 text-zinc-100 p-2 rounded overflow-auto max-h-64 whitespace-pre-wrap">
           {resultContent}
         </pre>
+      )}
+    </div>
+  );
+}
+
+function FileChangeItem({ file }: { file: FileChange }) {
+  const [expanded, setExpanded] = useState(false);
+  const fileName = file.path.split('/').pop() || file.path;
+
+  return (
+    <div className="rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 p-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded"
+      >
+        <span className="text-zinc-400 text-sm">{expanded ? '▼' : '▶'}</span>
+        <Badge
+          variant={file.action === 'created' ? 'default' : 'outline'}
+          className={file.action === 'created' ? 'bg-green-600 text-xs' : 'text-xs'}
+        >
+          {file.action}
+        </Badge>
+        <span className="font-mono text-sm truncate flex-1" title={file.path}>
+          {fileName}
+        </span>
+        <span className="text-xs text-zinc-500">
+          {file.backups.length} version{file.backups.length !== 1 ? 's' : ''}
+        </span>
+      </button>
+      {expanded && (
+        <div className="px-2 pb-2 space-y-1">
+          <div className="text-xs text-zinc-500 font-mono truncate px-2" title={file.path}>
+            {file.path}
+          </div>
+          {file.backups.map((backup, idx) => (
+            <div
+              key={idx}
+              className="flex items-center gap-2 px-2 py-1 text-xs font-mono bg-zinc-100 dark:bg-zinc-800 rounded"
+            >
+              <Badge variant="outline" className="text-xs">v{backup.version}</Badge>
+              {backup.backupFileName ? (
+                <span className="text-zinc-600 dark:text-zinc-400 truncate">
+                  {backup.backupFileName}
+                </span>
+              ) : (
+                <span className="text-zinc-400 italic">no backup (file created)</span>
+              )}
+              {backup.backupTime && (
+                <span className="text-zinc-400 ml-auto shrink-0">
+                  {new Date(backup.backupTime).toLocaleTimeString()}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

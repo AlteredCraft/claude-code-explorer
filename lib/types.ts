@@ -66,7 +66,7 @@ export interface SessionMetadata {
 
 export interface CorrelatedData {
   todos: TodoItem[];
-  fileHistory: FileHistoryEntry[];
+  filesChanged: FilesChangedResponse | null;
   debugLogs: string[];
   linkedPlan?: string;
   linkedSkill?: string;
@@ -77,12 +77,29 @@ export interface TodoItem {
   status: 'pending' | 'in_progress' | 'completed';
 }
 
-export interface FileHistoryEntry {
-  filePath: string;
-  backupFileName: string;
+// File change tracking types
+export interface FileBackup {
+  backupFileName: string | null;  // null for v1 of created files
   version: number;
   backupTime?: string;
-  messageId?: string;
+}
+
+export interface FileChange {
+  path: string;
+  action: 'created' | 'modified';
+  backups: FileBackup[];
+}
+
+export interface FileChangeSummary {
+  created: number;
+  modified: number;
+  totalFiles: number;
+}
+
+export interface FilesChangedResponse {
+  sessionId: string;
+  summary: FileChangeSummary;
+  files: FileChange[];
 }
 
 export interface ProjectConfig {

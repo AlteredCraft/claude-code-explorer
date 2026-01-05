@@ -718,9 +718,61 @@ async def get_correlated_data(session_id: str) -> dict:
     linked_plan = await find_linked_plan(session_id)
     linked_skill = await find_linked_skill(session_id)
 
+    # Build files_changed from file_history
+    files_changed = None
+    if file_history:
+        files_by_path: dict[str, list[dict]] = {}
+        for entry in file_history:
+            path = entry["filePath"]
+            if path not in files_by_path:
+                files_by_path[path] = []
+            files_by_path[path].append(entry)
+
+        files = []
+        created_count = 0
+        modified_count = 0
+
+        for path, entries in files_by_path.items():
+            sorted_entries = sorted(entries, key=lambda e: e.get("version", 0))
+            v1 = sorted_entries[0] if sorted_entries else None
+            is_created = v1 is not None and v1.get("backupFileName") is None
+            action = "created" if is_created else "modified"
+
+            if is_created:
+                created_count += 1
+            else:
+                modified_count += 1
+
+            backups = [
+                {
+                    "backupFileName": e.get("backupFileName"),
+                    "version": e.get("version", 0),
+                    "backupTime": e.get("backupTime"),
+                }
+                for e in sorted_entries
+            ]
+
+            files.append({
+                "path": path,
+                "action": action,
+                "backups": backups,
+            })
+
+        files.sort(key=lambda f: f["path"])
+
+        files_changed = {
+            "sessionId": session_id,
+            "summary": {
+                "created": created_count,
+                "modified": modified_count,
+                "totalFiles": len(files),
+            },
+            "files": files,
+        }
+
     return {
         "todos": todos,
-        "fileHistory": file_history,
+        "filesChanged": files_changed,
         "debugLogs": debug_logs,
         "linkedPlan": linked_plan,
         "linkedSkill": linked_skill,

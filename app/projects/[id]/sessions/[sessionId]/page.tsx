@@ -119,7 +119,7 @@ export default async function SessionPage({ params }: PageProps) {
           <CardContent>
             <div className="text-2xl font-semibold">
               {(correlatedData.todos.length > 0 ? 1 : 0) +
-                (correlatedData.fileHistory.length > 0 ? 1 : 0) +
+                (correlatedData.filesChanged?.files.length ? 1 : 0) +
                 (correlatedData.debugLogs.length > 0 ? 1 : 0) +
                 (correlatedData.linkedPlan ? 1 : 0)}
             </div>

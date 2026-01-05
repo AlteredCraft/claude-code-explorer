@@ -215,9 +215,10 @@ class FileHistoryEntry(BaseModel):
         alias="filePath",
         description="Original file path that was backed up"
     )
-    backup_file_name: str = Field(
+    backup_file_name: str | None = Field(
+        None,
         alias="backupFileName",
-        description="Backup filename in format {contentHash}@v{version} (e.g., 59e0b9c43163e850@v1)"
+        description="Backup filename in format {contentHash}@v{version}. Null indicates file was created (no prior content to backup)"
     )
     version: int = Field(description="Sequential version number for this file within the session")
     backup_time: str | None = Field(
@@ -235,18 +236,75 @@ class FileHistoryEntry(BaseModel):
         populate_by_name = True
 
 
+class FileBackup(BaseModel):
+    """A single backup version of a file."""
+    backup_file_name: str | None = Field(
+        None,
+        alias="backupFileName",
+        description="Backup filename for retrieving content. Null for v1 of created files"
+    )
+    version: int = Field(description="Version number within session")
+    backup_time: str | None = Field(
+        None,
+        alias="backupTime",
+        description="ISO 8601 timestamp when backup was created"
+    )
+
+    class Config:
+        populate_by_name = True
+
+
+class FileChange(BaseModel):
+    """A file touched during a session with derived change type."""
+    path: str = Field(description="File path relative to project")
+    action: str = Field(description="Change type: 'created' or 'modified'")
+    backups: list[FileBackup] = Field(
+        description="Backup versions for retrieving content. Use backupFileName with /file-history/{name} endpoint"
+    )
+
+    class Config:
+        populate_by_name = True
+
+
+class FileChangeSummary(BaseModel):
+    """Summary counts of file changes in a session."""
+    created: int = Field(description="Number of files created")
+    modified: int = Field(description="Number of files modified")
+    total_files: int = Field(
+        alias="totalFiles",
+        description="Total unique files touched"
+    )
+
+    class Config:
+        populate_by_name = True
+
+
+class FilesChangedResponse(BaseModel):
+    """Response for files-changed endpoint."""
+    session_id: str = Field(
+        alias="sessionId",
+        description="Session UUID"
+    )
+    summary: FileChangeSummary = Field(description="Summary of file changes")
+    files: list[FileChange] = Field(description="List of changed files with details")
+
+    class Config:
+        populate_by_name = True
+
+
 class CorrelatedData(BaseModel):
     """Data correlated by session UUID.
 
-    Session UUID links: todos, file history, debug logs, and references
+    Session UUID links: todos, file changes, debug logs, and references
     to plans and skills.
     """
     todos: list[TodoItem] = Field(
         description="Task items for this session"
     )
-    file_history: list[FileHistoryEntry] = Field(
-        alias="fileHistory",
-        description="File backups created during this session"
+    files_changed: FilesChangedResponse | None = Field(
+        None,
+        alias="filesChanged",
+        description="Files created or modified during this session"
     )
     debug_logs: list[str] = Field(
         alias="debugLogs",

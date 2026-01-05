@@ -2,6 +2,10 @@
 
 A visual web app to explore `~/.claude/` session context and metadata. Session-centric exploration: given a session ID, see everything that happened - conversation, metadata, files touched, tools used, and correlated data across directories.
 
+> **This is an experimental tool for exploring Claude Code session data**: Due diligence has not (yet) been put towards code/review, efficiency. The domain logic against `~/.claude/` data structures is best-effort and may not cover all edge cases. See my current understanding here: [`docs/claude-code-data-structures.md`](docs/claude-code-data-structures.md).
+>
+> Oh, and 99% of this code was written by Claude Code. I'm just having fun with this project, hopefully it proves useful!
+
 ## Features
 
 - **Projects List**: Browse all projects with Claude Code sessions
@@ -122,5 +126,4 @@ claude-explorer/
 - [ ] Project folders UI (group projects into named folders)
 
 ### Maintenance
-- [ ] Validate API spec against `docs/api-spec.yaml`
 - [ ] Sync TypeScript types with Pydantic models

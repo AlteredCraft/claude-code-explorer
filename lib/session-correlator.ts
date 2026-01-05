@@ -1,15 +1,15 @@
 import { readdir, readFile } from 'fs/promises';
 import { join } from 'path';
 import { getClaudeDir } from './path-utils';
-import type { CorrelatedData, TodoItem, FileHistoryEntry } from './types';
+import type { CorrelatedData, TodoItem, FileBackup, FileChange, FilesChangedResponse } from './types';
 
 /**
  * Find all data correlated with a session ID
  */
 export async function correlateSessionData(sessionId: string): Promise<CorrelatedData> {
-  const [todos, fileHistory, debugLogs, linkedPlan, linkedSkill] = await Promise.all([
+  const [todos, filesChanged, debugLogs, linkedPlan, linkedSkill] = await Promise.all([
     findSessionTodos(sessionId),
-    findSessionFileHistory(sessionId),
+    findSessionFilesChanged(sessionId),
     findSessionDebugLogs(sessionId),
     findLinkedPlan(sessionId),
     findLinkedSkill(sessionId),
@@ -17,7 +17,7 @@ export async function correlateSessionData(sessionId: string): Promise<Correlate
 
   return {
     todos,
-    fileHistory,
+    filesChanged,
     debugLogs,
     linkedPlan,
     linkedSkill,
@@ -84,37 +84,69 @@ async function findSessionTodos(sessionId: string): Promise<TodoItem[]> {
 }
 
 /**
- * Find file history for a session
+ * Find files changed during a session
  * File history backup files are stored in ~/.claude/file-history/[session-uuid]/
  * Format: {fileHash}@v{version}
+ *
+ * Note: This is a simplified implementation that only reads from the backup directory.
+ * The full implementation should parse session transcripts for file-history-snapshot messages.
  */
-async function findSessionFileHistory(sessionId: string): Promise<FileHistoryEntry[]> {
+async function findSessionFilesChanged(sessionId: string): Promise<FilesChangedResponse | null> {
   const claudeDir = getClaudeDir();
   const fileHistoryDir = join(claudeDir, 'file-history', sessionId);
 
   try {
     const files = await readdir(fileHistoryDir);
-    const entries: FileHistoryEntry[] = [];
+
+    // Group by hash to identify unique files
+    const filesByHash: Map<string, FileBackup[]> = new Map();
 
     for (const file of files) {
       // Backup files have format: {hash}@v{version}
       const match = file.match(/^(.+)@v(\d+)$/);
       if (match) {
-        entries.push({
-          filePath: `(backup ${match[1]})`,
+        const hash = match[1];
+        const version = parseInt(match[2], 10);
+
+        if (!filesByHash.has(hash)) {
+          filesByHash.set(hash, []);
+        }
+        filesByHash.get(hash)!.push({
           backupFileName: file,
-          version: parseInt(match[2], 10),
+          version,
         });
       }
     }
 
-    return entries.sort((a, b) => {
-      const pathCompare = a.filePath.localeCompare(b.filePath);
-      if (pathCompare !== 0) return pathCompare;
-      return a.version - b.version;
-    });
+    if (filesByHash.size === 0) {
+      return null;
+    }
+
+    // Convert to FileChange array
+    // Note: Without parsing session transcripts, we can't determine the actual file paths
+    // or whether files were created vs modified
+    const fileChanges: FileChange[] = [];
+
+    for (const [hash, backups] of filesByHash) {
+      backups.sort((a, b) => a.version - b.version);
+      fileChanges.push({
+        path: `(backup ${hash})`,
+        action: 'modified', // Can't determine without transcript parsing
+        backups,
+      });
+    }
+
+    return {
+      sessionId,
+      summary: {
+        created: 0,
+        modified: fileChanges.length,
+        totalFiles: fileChanges.length,
+      },
+      files: fileChanges,
+    };
   } catch {
-    return [];
+    return null;
   }
 }
 
