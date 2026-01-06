@@ -4,33 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { SourcePath } from '@/components/source-path';
 import Link from 'next/link';
 import { ActivityTimeline } from '@/components/activity-timeline';
-
-function decodeFromUrl(str: string): string {
-  return decodeURIComponent(str);
-}
-
-function decodeProjectPath(encoded: string): string {
-  if (encoded.startsWith('-')) {
-    return '/' + encoded.slice(1).replace(/-/g, '/');
-  }
-  return encoded.replace(/-/g, '/');
-}
-
-function getDisplayPath(path: string): string {
-  // Approximate home detection
-  if (path.startsWith('/Users/') || path.startsWith('/home/')) {
-    const parts = path.split('/');
-    if (parts.length >= 3) {
-      return '~/' + parts.slice(3).join('/');
-    }
-  }
-  return path;
-}
-
-function getProjectName(path: string): string {
-  const parts = path.split('/');
-  return parts[parts.length - 1] || path;
-}
+import { decodeFromUrl, decodeProjectPath, getDisplayPath, getProjectName } from '@/lib/url-utils';
+import { formatSessionTime } from '@/lib/format-utils';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -193,16 +168,3 @@ export default async function ProjectPage({ params }: PageProps) {
   );
 }
 
-function formatSessionTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffDays === 0) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } else if (diffDays < 7) {
-    return date.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-  }
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}

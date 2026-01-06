@@ -85,6 +85,7 @@ export interface Message {
   model?: string;
   cwd?: string;
   gitBranch?: string;
+  thinking?: string; // Extracted thinking content when flatten=true
 }
 
 export interface MessageContent {

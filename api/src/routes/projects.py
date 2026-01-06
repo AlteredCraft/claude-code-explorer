@@ -848,13 +848,18 @@ async def list_messages(
                     # User messages typically have string content - already flat
                     msg["content"] = {"role": role, "content": inner}
                 elif isinstance(inner, list):
-                    # Assistant messages have array of blocks - extract text
+                    # Assistant messages have array of blocks - extract text and thinking
                     text_parts = []
+                    thinking_parts = []
                     for block in inner:
                         if isinstance(block, dict):
                             if block.get("type") == "text" and block.get("text"):
                                 text_parts.append(block["text"])
+                            elif block.get("type") == "thinking" and block.get("thinking"):
+                                thinking_parts.append(block["thinking"])
                     msg["content"] = {"role": role, "content": "\n\n".join(text_parts)}
+                    if thinking_parts:
+                        msg["thinking"] = "\n\n".join(thinking_parts)
 
     # Paginate
     total = len(messages)

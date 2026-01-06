@@ -399,6 +399,10 @@ class Message(BaseModel):
         alias="gitBranch",
         description="Active git branch at time of message"
     )
+    thinking: str | None = Field(
+        None,
+        description="Extracted thinking content when flatten=true (from extended thinking blocks)"
+    )
 
     class Config:
         populate_by_name = True

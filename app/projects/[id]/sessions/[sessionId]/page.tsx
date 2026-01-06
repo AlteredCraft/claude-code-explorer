@@ -4,22 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { SourcePath } from '@/components/source-path';
 import { SessionTabs } from '@/components/session-tabs';
 import Link from 'next/link';
-
-function decodeFromUrl(str: string): string {
-  return decodeURIComponent(str);
-}
-
-function decodeProjectPath(encoded: string): string {
-  if (encoded.startsWith('-')) {
-    return '/' + encoded.slice(1).replace(/-/g, '/');
-  }
-  return encoded.replace(/-/g, '/');
-}
-
-function getProjectName(path: string): string {
-  const parts = path.split('/');
-  return parts[parts.length - 1] || path;
-}
+import { decodeFromUrl, decodeProjectPath, getProjectName } from '@/lib/url-utils';
+import { formatDuration } from '@/lib/format-utils';
 
 interface PageProps {
   params: Promise<{ id: string; sessionId: string }>;
@@ -138,17 +124,3 @@ export default async function SessionPage({ params }: PageProps) {
   );
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return '< 1s';
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-
-  if (hours > 0) {
-    return `${hours}h ${minutes % 60}m`;
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`;
-  }
-  return `${seconds}s`;
-}

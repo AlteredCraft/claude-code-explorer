@@ -27,39 +27,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ProjectConfigModal } from '@/components/project-config-modal';
 import { ColumnInfoModal } from '@/components/column-info-modal';
 import Link from 'next/link';
+import { formatRelativeTime, formatCost, formatTokens } from '@/lib/format-utils';
 
 function encodeForUrl(str: string): string {
   return encodeURIComponent(str);
-}
-
-function formatRelativeTime(dateStr: string | undefined): string {
-  if (!dateStr) return 'Never';
-
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-
-  return date.toLocaleDateString();
-}
-
-function formatCost(cost: number | undefined | null): string {
-  if (cost === undefined || cost === null) return '-';
-  return `$${cost.toFixed(2)}`;
-}
-
-function formatTokens(tokens: number | undefined | null): string {
-  if (tokens === undefined || tokens === null) return '-';
-  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
-  return tokens.toString();
 }
 
 export default async function HomePage() {
@@ -159,7 +130,7 @@ export default async function HomePage() {
                         <div className="font-medium text-zinc-900 dark:text-zinc-100">
                           {project.name}
                         </div>
-                        <div className="text-xs text-zinc-500 dark:text-zinc-500 font-mono">
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
                           {project.displayPath}
                           {project.isOrphan && (
                             <span
@@ -257,7 +228,7 @@ export default async function HomePage() {
                       <div className="font-medium text-zinc-900 dark:text-zinc-100">
                         {project.name}
                       </div>
-                      <div className="text-xs text-zinc-500 dark:text-zinc-500 font-mono">
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
                         {project.displayPath}
                       </div>
                     </TableCell>
